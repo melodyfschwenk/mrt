@@ -212,55 +212,56 @@
     nextTrial();
   }
 
-  function nextTrial(){
-    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
-    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+function nextTrial(){
+  if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
+  if (state.timer) { clearTimeout(state.timer); state.timer = null; }
 
-    const list = state.practice ? state.practiceTrials : state.mainTrials;
-    if (state.trialIndex >= list.length) {
-      if (state.practice) {
-        showFeedback('Practice complete', '#4caf50');
-        setTimeout(() => {
-          ibox.innerHTML = `
-            <h2>Main Task</h2>
-            <p>You’ll now begin the main block (${state.mainTrials.length} trials). No feedback will be shown.</p>
-            <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
-          ibox.style.display = 'block';
-          document.getElementById('beginMainBtn').onclick = () => { ibox.style.display = 'none'; startMain(); };
-        }, 500);
-      } else {
-        finishTask();
-      }
-      return;
+  const list = state.practice ? state.practiceTrials : state.mainTrials;
+  if (state.trialIndex >= list.length) {
+    if (state.practice) {
+      showFeedback('Practice complete', '#4caf50');
+      setTimeout(() => {
+        ibox.innerHTML = `
+          <h2>Main Task</h2>
+          <p>You’ll now begin the main block (${state.mainTrials.length} trials). No feedback will be shown.</p>
+          <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
+        ibox.style.display = 'block';
+        document.getElementById('beginMainBtn').onclick = () => { ibox.style.display = 'none'; startMain(); };
+      }, 500);
+    } else {
+      finishTask();
     }
-
-    state.current = list[state.trialIndex];
-
-    // Fixation (single central)
-    const side = computeCanvasSide();
-    const ctx = sizeCanvasSquare(canvas, side);
-    drawCenteredFixation(ctx, side);
-
-    setTimeout(() => {
-      // Stimulus
-      layoutAndDraw(state.current);
-      state.onsetTs = performance.now();
-
-      // Response window
-      state.onKey = (ev)=> handleKey(ev);
-      window.addEventListener('keydown', state.onKey, { once: true });
-
-      // Touch buttons
-      touchSame.onclick = ()=> handleResponse('same');
-      touchMirror.onclick = ()=> handleResponse('mirror');
-
-      state.timer = setTimeout(()=> handleResponse('none'), CFG.MAX_RT_MS);
-
-    }, CFG.FIXATION_MS);
-
-    const total = state.practice ? CFG.PRACTICE_TRIALS : state.mainTrials.length;
-    setProgress(state.trialIndex + 1, total);
+    return;
   }
+
+  state.current = list[state.trialIndex];
+
+  // --- Fixation (single central) ---
+  const side = computeCanvasSide();
+  const ctx = sizeCanvasSquare(canvas, side);
+  drawCenteredFixation(ctx, side);
+
+  setTimeout(() => {
+    // --- Stimulus (letters only) ---
+    layoutAndDraw(state.current);
+    state.onsetTs = performance.now();
+
+    // Keyboard (F = same, J = mirror)
+    state.onKey = (ev) => handleKey(ev);
+    window.addEventListener('keydown', state.onKey, { once: true });
+
+    // Touch buttons (set per trial)
+    if (touchSame)   touchSame.onclick   = () => handleResponse('same');
+    if (touchMirror) touchMirror.onclick = () => handleResponse('mirror');
+
+    // Timeout
+    state.timer = setTimeout(() => handleResponse('none'), CFG.MAX_RT_MS);
+  }, CFG.FIXATION_MS);
+
+  const total = state.practice ? CFG.PRACTICE_TRIALS : state.mainTrials.length;
+  setProgress(state.trialIndex + 1, total);
+}
+
 
   function handleKey(ev){
     const k = (ev.key || '').toLowerCase();
@@ -357,9 +358,7 @@
     if (state.current) layoutAndDraw(state.current);
   });
 
-  // Touch buttons
-  if (touchSame)   touchSame.addEventListener('click', ()=> handleResponse('same'));
-  if (touchMirror) touchMirror.addEventListener('click', ()=> handleResponse('mirror'));
+ 
 
   // Initial HUD
   setPhase('Ready');
