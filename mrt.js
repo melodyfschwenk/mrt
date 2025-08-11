@@ -171,4 +171,196 @@ function setScreen(id){
   $(id).classList.add('active');
 }
 
-function setProgress(i, total)
+function setProgress(i, total){
+  $('progress').textContent = `${i}/${total}`;
+}
+
+let keyHandler = null;
+let timeoutId = null;
+
+function armKeys(handler){
+  disarmKeys();
+  keyHandler = (e)=>handler(e);
+  document.addEventListener('keydown', keyHandler, { once:true });
+}
+
+function disarmKeys(){
+  if (keyHandler) document.removeEventListener('keydown', keyHandler, { once:true });
+  keyHandler = null;
+}
+
+function startTimeout(){
+  stopTimeout();
+  timeoutId = setTimeout(()=> handleResponse({ key:'timeout' }), CFG.MAX_RT_MS);
+}
+function stopTimeout(){
+  if (timeoutId) clearTimeout(timeoutId);
+  timeoutId = null;
+}
+
+async function nextTrial(){
+  const list = (state.phase === 'practice') ? PRACTICE : MAIN;
+
+  if (state.trialIndex >= list.length){
+    if (state.phase === 'practice'){
+      // move to main
+      state.phase = 'main';
+      state.trialIndex = 0;
+      $('fb').textContent = '';
+      runMain();
+      return;
+    } else {
+      finish();
+      return;
+    }
+  }
+
+  const t = list[state.trialIndex];
+  setProgress(state.trialIndex+1, list.length);
+  renderTrial(t);
+  state.onset = now();
+  startTimeout();
+  armKeys(handleResponse);
+}
+
+function logTrial(t, respKey, rt){
+  const correct = correctFor(t);
+  const response = responseLabel(respKey);
+  const accuracy = (response && response === correct) ? 1 : 0;
+
+  const row = {
+    phase: state.phase,
+    participant_id: PARTICIPANT_ID,
+    session_code: SESSION_CODE || '',
+    trial: state.trialIndex + 1,
+    angle: t.angle,
+    condition: t.cond,
+    left_is_mirror: t.cond === 'mirror' ? t.leftIsMirror : false,
+    left_angle: t.leftAngle,
+    right_angle: t.rightAngle,
+    correct: correct,
+    response: response || 'invalid',
+    accuracy: response === 'timeout' ? 0 : accuracy,
+    rt_ms: response === 'timeout' ? null : Math.round(rt),
+    timestamp: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    version: CFG.VERSION
+  };
+
+  allRows.push(row);
+  // Save only main trials to Sheets? We can save both; keeping both is often useful.
+  saveTrialRow(row);
+}
+
+function showPracticeFeedback(respKey, isCorrect){
+  const fb = $('fb');
+  if (respKey === 'timeout') { fb.textContent = 'Too slow'; fb.style.color = '#ff9800'; }
+  else if (isCorrect) { fb.textContent = 'Correct'; fb.style.color = '#4caf50'; }
+  else { fb.textContent = 'Incorrect'; fb.style.color = '#f44336'; }
+}
+
+function clearFeedback(){ $('fb').textContent = ''; }
+
+function handleResponse(e){
+  stopTimeout();
+  disarmKeys();
+
+  const list = (state.phase === 'practice') ? PRACTICE : MAIN;
+  const t = list[state.trialIndex];
+  const respKey = e.key || e;
+  const resp = responseLabel(respKey);
+  const rt = (respKey === 'timeout') ? null : (now() - state.onset);
+
+  const correct = correctFor(t);
+  const isCorrect = (resp && resp === correct);
+  logTrial(t, respKey, rt);
+
+  if (state.phase === 'practice'){
+    showPracticeFeedback(respKey, isCorrect);
+    setTimeout(()=> {
+      clearFeedback();
+      state.trialIndex++;
+      nextTrial();
+    }, 900);
+  } else {
+    // no feedback in main
+    state.trialIndex++;
+    nextTrial();
+  }
+}
+
+async function runPractice(){
+  state.phase = 'practice';
+  state.trialIndex = 0;
+  setScreen('trial');
+  nextTrial();
+}
+
+async function runMain(){
+  state.phase = 'main';
+  state.trialIndex = 0;
+  setScreen('trial');
+  nextTrial();
+}
+
+function downloadCSV(){
+  if (!allRows.length) return alert('No data');
+  const headers = Object.keys(allRows[0]);
+  const rows = [
+    headers.join(','),
+    ...allRows.map(r => headers.map(h => {
+      const v = r[h];
+      if (v == null) return '';
+      const s = String(v);
+      return (s.includes(',') || s.includes('"') || s.includes('\n'))
+        ? `"${s.replace(/"/g,'""')}"`
+        : s;
+    }).join(','))
+  ].join('\n');
+
+  const blob = new Blob([rows], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `mrt_${PARTICIPANT_ID}_${Date.now()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function finish(){
+  // compute summary
+  const mains = allRows.filter(r => r.phase === 'main');
+  const n = mains.length;
+  const valid = mains.filter(r => r.rt_ms != null);
+  const meanRt = valid.length ? valid.reduce((s,r)=>s+r.rt_ms,0)/valid.length : 0;
+  const acc = n ? mains.filter(r=>r.accuracy===1).length / n : 0;
+
+  await saveSummary(PARTICIPANT_ID, meanRt, acc);
+
+  $('summary').textContent = `Accuracy: ${(acc*100).toFixed(1)}% • Mean RT: ${Math.round(meanRt)} ms • Trials: ${n}`;
+  setScreen('done');
+}
+
+// --- init ---
+async function init(){
+  document.body.style.background = CFG.BG;
+  $('start-btn').addEventListener('click', runPractice);
+  $('download').addEventListener('click', downloadCSV);
+
+  PARTICIPANT_ID = await getParticipantId();
+  $('id-line').textContent = `Participant ID: ${PARTICIPANT_ID}` + (SESSION_CODE ? ` • Session: ${SESSION_CODE}` : '');
+
+  // build trials
+  PRACTICE = buildPracticeTrials(PARTICIPANT_ID);
+  MAIN = buildMainTrials(PARTICIPANT_ID);
+
+  // Make canvases crisp on HiDPI
+  for (const id of ['left','right']){
+    const c = $(id);
+    const dpr = window.devicePixelRatio || 1;
+    c.width = 300 * dpr; c.height = 300 * dpr;
+    c.style.width = '300px'; c.style.height = '300px';
+    c.getContext('2d').scale(dpr, dpr);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
