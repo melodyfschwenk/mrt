@@ -95,21 +95,51 @@ function buildPracticeTrials(pid){
   return shuffle(pool, rnd);
 }
 
+<!-- Fullscreen start overlay -->
+<div id="fs-overlay" style="
+  position:fixed; inset:0; background:#000; color:#fff; 
+  display:flex; align-items:center; justify-content:center; 
+  flex-direction:column; z-index:10000; text-align:center; padding:24px;">
+  <h1 style="margin:0 0 12px; font:600 24px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial">Mental Rotation Task</h1>
+  <p style="max-width:640px; margin:0 0 20px; color:#bbb;">
+    You’ll see two <strong>R</strong> letters side by side. Decide if they are the <em>same</em> or a <em>mirror</em> image.
+    The task will run in fullscreen to keep things consistent.
+  </p>
+  <button id="fs-start" style="padding:12px 22px; border-radius:8px; border:0; font-weight:700; cursor:pointer;">
+    Start (Fullscreen)
+  </button>
+  <p style="margin-top:12px; font-size:12px; color:#888;">If fullscreen is blocked by your browser, we’ll still continue.</p>
+</div>
+
 // --- drawing ---
 function drawR(ctx, angleDeg, mirror=false){
-  const cx = ctx.canvas.width/2, cy = ctx.canvas.height/2;
+  const cw = ctx.canvas.width / (window.devicePixelRatio || 1);
+  const ch = ctx.canvas.height / (window.devicePixelRatio || 1);
+
+  // convert 12 pt to ~16 px at 96 dpi
+  const pxFromPt = Math.round((window.MRT_CONFIG.FONT_PT || 12) * 96 / 72);
+  const margin = window.MRT_CONFIG.LETTER_MARGIN_PX ?? 0;
+
   ctx.save();
-  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-  ctx.translate(cx, cy);
-  ctx.rotate(angleDeg * Math.PI/180);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  // draw in CSS pixel space (we already scaled for HiDPI in init)
+  ctx.translate(cw / 2, ch / 2);
+  ctx.rotate(angleDeg * Math.PI / 180);
   if (mirror) ctx.scale(-1, 1);
+
   ctx.fillStyle = CFG.FG;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = CFG.FONT;
+  ctx.font = `${CFG.FONT_WEIGHT || 'bold'} ${pxFromPt}px ${CFG.FONT_FAMILY}`;
+
+  // tiny nudge to avoid edge clipping at some rotations
+  ctx.translate(0, -margin);
   ctx.fillText('R', 0, 0);
+
   ctx.restore();
 }
+
 
 function renderTrial(t){
   const L = $('left').getContext('2d');
