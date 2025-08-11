@@ -1,610 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mental Rotation (Mirror vs Same)</title>
-<style>
-  :root {
-    --bg: #000;
-    --fg: #fff;
-    --muted: #ccc;
-    --accent: #4caf50;
-    --warn: #ffb300;
-    --err: #ff5252;
-  }
-  html, body {
-    margin: 0;
-    height: 100%;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    touch-action: none; /* enables swipe on iOS */
-  }
-  .wrap {
-    height: 100%;
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    align-items: center;
-    justify-items: center;
-  }
-  header, footer {
-    width: 100%;
-    max-width: 960px;
-    padding: 10px 16px;
-    box-sizing: border-box;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    user-select: none;
-  }
-  header .title { font-weight: 700; letter-spacing: .3px; }
-  header .right { opacity: .8; font-size: 14px; }
-  .screen { display: none; width: 100%; max-width: 960px; padding: 10px 16px; box-sizing: border-box; }
-  .screen.active { display: block; }
-
-  /* Canvas stage */
-  .stage {
-    width: 100%;
-    height: calc(100vh - 140px);
-    display: grid;
-    place-items: center;
-    position: relative;
-  }
-  canvas { background: transparent; display: block; }
-
-  /* Buttons / UI */
-  .btn {
-    background: var(--accent);
-    color: #fff;
-    border: 0;
-    border-radius: 10px;
-    padding: 12px 20px;
-    font-size: 16px;
-    cursor: pointer;
-  }
-  .btn.secondary { background: #555; }
-  .btn:disabled { opacity:.5; cursor: not-allowed; }
-
-  .card {
-    background: rgba(255,255,255,.06);
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 12px;
-    padding: 16px 18px;
-    max-width: 720px;
-    margin: 14px auto;
-  }
-  .card h2 { margin: 0 0 8px 0; font-size: 22px; }
-  .card p { margin: 6px 0; color: var(--muted); line-height: 1.5; }
-
-  .legend {
-    font-size: 14px;
-    text-align: center;
-    opacity: .9;
-  }
-  .legend strong { color: #fff; }
-
-  .fixation {
-    position: absolute;
-    width: 64px; height: 64px;
-  }
-  .fixation::before, .fixation::after {
-    content:""; position:absolute; background:#fff; border-radius:1px;
-  }
-  .fixation::before { left:50%; transform:translateX(-50%); top:0; width:2px; height:100%; }
-  .fixation::after  { top:50%; transform:translateY(-50%); left:0; width:100%; height:2px; }
-
-  .banner {
-    position:absolute; top:10px; left:50%; transform:translateX(-50%);
-    font-size: 14px; padding: 6px 10px; border-radius: 8px;
-    background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12);
-  }
-  .feedback {
-    position:absolute; bottom:20px; left:50%; transform:translateX(-50%);
-    font-weight:700; font-size:22px;
-  }
-  .ok { color: #7CFC9A; }
-  .bad { color: var(--err); }
-  .slow { color: var(--warn); }
-
-  .progress { font-size: 14px; opacity: .8; }
-  .hint { font-size: 13px; color: var(--muted); }
-</style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mental Rotation Task (R / Mirror)</title>
+  <meta name="color-scheme" content="dark light">
+  <style>
+    html, body {
+      margin:0; padding:0; height:100%;
+      background:#000; color:#fff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    .wrap {
+      min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    }
+    .screen { display:none; text-align:center; padding:20px; max-width:900px; }
+    .screen.active { display:block; }
+    .button {
+      appearance:none; border:0; border-radius:10px; padding:12px 20px; margin:10px; cursor:pointer;
+      background:#fff; color:#000; font-weight:700; font-size:16px;
+    }
+    .button:disabled { opacity:.5; cursor:not-allowed; }
+    .muted { color:#bbb; font-size:14px; }
+    .row { display:flex; gap:40px; align-items:center; justify-content:center; flex-wrap:wrap; }
+    canvas { background:transparent; display:block; width:300px; height:300px; }
+    .progress { position:fixed; top:10px; right:10px; color:#aaa; font-size:14px;}
+    .legend { margin-top:16px; color:#ddd; font-size:16px; }
+    .feedback { font-size:28px; font-weight:800; margin-top:10px; }
+    .kbd { display:inline-block; padding:3px 8px; border:1px solid #888; border-radius:6px; font-family:monospace; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <div class="title">Mental Rotation</div>
-    <div class="right"><span id="progress" class="progress"></span></div>
-  </header>
+  <div class="progress" id="progress"></div>
+  <div class="wrap">
 
-  <!-- Intro / Consent / Start -->
-  <main id="intro" class="screen active">
-    <div class="card">
-      <h2>Welcome</h2>
-      <p>You’ll see two rotated letters “R”. Decide if they are the <strong>same</strong> (just rotated) or if one is a <strong>mirror image</strong>.</p>
-      <p class="legend"><strong>Swipe right</strong> (or press →) = <strong>SAME</strong> &nbsp;&nbsp;•&nbsp;&nbsp; <strong>Swipe left</strong> (or press ←) = <strong>MIRROR</strong></p>
-      <p>There’s a short practice with feedback. The main task has 140 trials (<span class="hint">7 angles × 2 types × 10 reps</span>).</p>
-      <p class="hint">Use a phone/tablet (swipe) or a keyboard (←/→). Background is black for high contrast.</p>
+    <!-- Welcome / Instructions -->
+    <div class="screen active" id="welcome">
+      <h1 style="margin-bottom:8px;">Mental Rotation Task</h1>
+      <p>Two letters appear side-by-side. Decide if they are the <strong>same</strong> (non-mirror) or a <strong>mirror</strong> pair.</p>
+      <div class="legend">
+        Respond with <span class="kbd">←</span>/<span class="kbd">F</span> = <strong>Same</strong>, 
+        <span class="kbd">→</span>/<span class="kbd">J</span> = <strong>Mirror</strong>
+      </div>
+      <div style="margin:18px 0 6px">Practice comes first (brief feedback), then the main task.</div>
+      <div class="muted">Black background, bold white “R”s for high contrast.</div>
+
+      <div style="margin-top:20px">
+        <button class="button" id="start-btn">Start Practice</button>
+      </div>
+
+      <div class="muted" style="margin-top:20px" id="id-line"></div>
     </div>
-    <div style="display:flex; gap:10px; align-items:center; margin: 10px 0 6px;">
-      <label for="custom-id" class="hint">Optional participant code:&nbsp;</label>
-      <input id="custom-id" placeholder="e.g., P042" style="padding:8px 10px; border-radius:8px; border:1px solid #444; background:#111; color:#fff;">
+
+    <!-- Trial screen -->
+    <div class="screen" id="trial">
+      <div class="row">
+        <canvas id="left" width="300" height="300"></canvas>
+        <canvas id="right" width="300" height="300"></canvas>
+      </div>
+      <div class="legend">
+        <span class="kbd">←</span>/<span class="kbd">F</span> Same &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; 
+        <span class="kbd">→</span>/<span class="kbd">J</span> Mirror
+      </div>
+      <div class="feedback" id="fb" style="min-height:38px;"></div>
     </div>
-    <button class="btn" id="startBtn">Get ID & Start</button>
-  </main>
 
-  <!-- Practice -->
-  <main id="practice" class="screen">
-    <div class="card">
-      <h2>Practice</h2>
-      <p>Respond quickly and accurately. You’ll see brief feedback: <span class="ok">Correct</span>, <span class="bad">Incorrect</span>, or <span class="slow">Too slow</span>.</p>
-      <p class="legend"><strong>Swipe right / →</strong> = SAME &nbsp;&nbsp;•&nbsp;&nbsp; <strong>Swipe left / ←</strong> = MIRROR</p>
-      <button class="btn" id="beginPractice">Begin practice</button>
+    <!-- Completion -->
+    <div class="screen" id="done">
+      <h2>All done—thank you!</h2>
+      <p id="summary"></p>
+      <button class="button" id="download">Download CSV (optional backup)</button>
     </div>
-  </main>
 
-  <!-- Stage -->
-  <main id="stage" class="screen">
-    <div class="stage" id="stageBox">
-      <div id="modeBanner" class="banner">Swipe right = <b>SAME</b> • Swipe left = <b>MIRROR</b></div>
-      <canvas id="stimCanvas" width="1000" height="600"></canvas>
-      <div id="fix" class="fixation" hidden></div>
-      <div id="fb" class="feedback" hidden></div>
-    </div>
-  </main>
+  </div>
 
-  <!-- Break / Between blocks (we don’t have blocks here; we’ll reuse for “Practice done”) -->
-  <main id="break" class="screen">
-    <div class="card">
-      <h2 id="breakTitle">Practice complete</h2>
-      <p id="breakMsg">You can take a short break. When you’re ready, start the main task.</p>
-      <button class="btn" id="startMain">Start main task</button>
-    </div>
-  </main>
-
-  <!-- Done -->
-  <main id="done" class="screen">
-    <div class="card">
-      <h2>All set!</h2>
-      <p>Thank you for participating. Your responses have been saved.</p>
-      <div id="summary" class="hint"></div>
-      <button class="btn secondary" id="downloadCsv">Download backup CSV</button>
-    </div>
-  </main>
-
-  <footer>
-    <div class="hint">© Your Lab</div>
-    <div class="hint">Device: <span id="deviceInfo"></span></div>
-  </footer>
-</div>
-
-<script>
-/* ===========================
-   CONFIG
-   =========================== */
-const GOOGLE_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE'; // <-- replace after deploying Apps Script
-const PRACTICE_TRIALS = 12;   // balanced quick warm-up
-const MAX_RT_MS = 3000;
-const FIX_MS = 800;
-const ITI_MS = 450;
-
-// 7 equal steps including 0 and 180
-const ANGLES = (() => {
-  const n = 7, step = 180/(n-1); const arr = [];
-  for (let i=0;i<n;i++) arr.push(Math.round(i*step));
-  return arr; // [0,30,60,90,120,150,180]
-})();
-
-/* ===========================
-   UTIL: seeded RNG for reproducibility per participant
-   =========================== */
-class RNG {
-  constructor(seed){ this.seed = seed>>>0; }
-  next(){
-    let t = this.seed += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  }
-  shuffle(a){
-    const arr=[...a];
-    for(let i=arr.length-1;i>0;i--){
-      const j = Math.floor(this.next()*(i+1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
-}
-function rngFromString(s){
-  const base = String(s).split('').reduce((acc,c)=>acc + c.charCodeAt(0), 0);
-  return new RNG((base*2654435761)>>>0);
-}
-
-/* ===========================
-   STATE
-   =========================== */
-const state = {
-  pid: null,
-  device: navigator.userAgent,
-  practicePlan: [],
-  mainPlan: [],
-  i: -1, // trial index in current plan
-  planRef: null, // 'practice' | 'main'
-  current: null,
-  onset: 0,
-  timeoutHandle: null,
-  data: [],
-};
-
-/* ===========================
-   GOOGLE: ID + Save
-   =========================== */
-async function getNewId(customCode){
-  try {
-    const res = await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action:'nextIdLocked', experiment:'MR', custom: customCode || '' })
-    });
-    const json = await res.json();
-    if (!json.ok) throw new Error(json.error || 'bad response');
-    return json.id; // e.g., MR-20250810-003
-  } catch (e) {
-    // local fallback
-    const hex = Math.random().toString(16).slice(2,8);
-    return `MR-local-${Date.now().toString(36)}-${hex}`;
-  }
-}
-async function saveRow(row){
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action:'saveTrial', ...row })
-    });
-  } catch(e) { /* ignore (still keep local) */ }
-}
-async function saveSummary(obj){
-  try {
-    await fetch(GOOGLE_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action:'saveSummary', ...obj })
-    });
-  } catch(e) { /* ignore */ }
-}
-
-/* ===========================
-   TRIAL PLAN CONSTRUCTION
-   - condition: 'same' or 'mirror'
-   - mirroredSide: 'left' | 'right' | 'NA'
-   =========================== */
-function buildMainPlan(pid){
-  const rng = rngFromString(pid);
-  const trials = [];
-  for (const angle of ANGLES) {
-    // 10 SAME
-    for (let k=0;k<10;k++){
-      trials.push({ angle, condition:'same', mirroredSide:'NA' });
-    }
-    // 10 MIRROR: 5 left, 5 right
-    for (let k=0;k<5;k++) trials.push({ angle, condition:'mirror', mirroredSide:'left'  });
-    for (let k=0;k<5;k++) trials.push({ angle, condition:'mirror', mirroredSide:'right' });
-  }
-  // global shuffle
-  return rng.shuffle(trials);
-}
-function buildPracticePlan(pid){
-  // 12 trials: balanced quick mix
-  const rng = rngFromString(pid + '_practice');
-  const sampleAngles = ANGLES; // could be subset; using full set is fine
-  const trials = [];
-  // 6 SAME
-  for (let i=0;i<6;i++){
-    trials.push({ angle: sampleAngles[i % sampleAngles.length], condition:'same', mirroredSide:'NA' });
-  }
-  // 6 MIRROR (3 left, 3 right)
-  for (let i=0;i<3;i++){
-    trials.push({ angle: sampleAngles[(i+1) % sampleAngles.length], condition:'mirror', mirroredSide:'left'  });
-    trials.push({ angle: sampleAngles[(i+2) % sampleAngles.length], condition:'mirror', mirroredSide:'right' });
-  }
-  return rng.shuffle(trials).slice(0, PRACTICE_TRIALS);
-}
-
-/* ===========================
-   CANVAS DRAWING
-   =========================== */
-const canvas = document.getElementById('stimCanvas');
-const ctx = canvas.getContext('2d');
-
-function resizeCanvas(){
-  const box = document.getElementById('stageBox');
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const w = Math.min(1000, box.clientWidth);
-  const h = Math.min(700, box.clientHeight);
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  canvas.width = Math.floor(w*dpr);
-  canvas.height = Math.floor(h*dpr);
-  ctx.setTransform(dpr,0,0,dpr,0,0); // reset then scale by DPR for crisp text
-  clearCanvas();
-}
-function clearCanvas(){
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.restore();
-}
-
-function drawR(x, y, angleDeg, mirrored=false){
-  ctx.save();
-  ctx.translate(x, y);
-  // mirror first (horizontal), then rotate
-  if (mirrored) ctx.scale(-1, 1);
-  ctx.rotate(angleDeg * Math.PI / 180);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // Big bold sans for accessibility; size adapts to canvas
-  const scale = Math.min(canvas.width, canvas.height);
-  const px = Math.round(scale * 0.26); // ~260 px on 1000×700
-  ctx.font = `bold ${px}px Arial, Helvetica, sans-serif`;
-  ctx.fillStyle = '#fff';
-  ctx.fillText('R', 0, 0);
-  ctx.restore();
-}
-
-function drawTrial(stim){
-  clearCanvas();
-  // positions
-  const padX = Math.round(canvas.width / (window.devicePixelRatio||1)) * 0.08;
-  const cx = canvas.width / ((window.devicePixelRatio||1)*2);
-  const cy = canvas.height / ((window.devicePixelRatio||1)*2);
-  const leftX  = cx - (Math.min(cx, 360) - padX);
-  const rightX = cx + (Math.min(cx, 360) - padX);
-  const y = cy;
-
-  if (stim.condition === 'same'){
-    drawR(leftX,  y, stim.angle, false);
-    drawR(rightX, y, stim.angle, false);
-  } else {
-    const mirrorLeft = (stim.mirroredSide === 'left');
-    drawR(leftX,  y, stim.angle, mirrorLeft);
-    drawR(rightX, y, stim.angle, !mirrorLeft);
-  }
-}
-
-/* ===========================
-   FLOW CONTROL
-   =========================== */
-const screens = {
-  intro:    document.getElementById('intro'),
-  practice: document.getElementById('practice'),
-  stage:    document.getElementById('stage'),
-  break:    document.getElementById('break'),
-  done:     document.getElementById('done'),
-};
-function show(id){
-  Object.values(screens).forEach(el => el.classList.remove('active'));
-  screens[id].classList.add('active');
-}
-function setProgress(text){
-  document.getElementById('progress').textContent = text || '';
-}
-
-/* ===========================
-   INPUT (swipe + keyboard)
-   =========================== */
-let touchStart = null;
-function onTouchStart(e){
-  const t = e.changedTouches[0];
-  touchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
-}
-function onTouchEnd(e){
-  if (!touchStart) return;
-  const t = e.changedTouches[0];
-  const dx = t.clientX - touchStart.x;
-  const dy = t.clientY - touchStart.y;
-  const adx = Math.abs(dx), ady = Math.abs(dy);
-  const dt = performance.now() - touchStart.t;
-  touchStart = null;
-  // horizontal swipe with a minimal distance
-  if (adx > 30 && adx > ady) {
-    if (dx > 0) registerResponse('same');   // right
-    else        registerResponse('mirror'); // left
-  }
-}
-function onKeyDown(e){
-  if (e.key === 'ArrowRight') { e.preventDefault(); registerResponse('same'); }
-  else if (e.key === 'ArrowLeft') { e.preventDefault(); registerResponse('mirror'); }
-}
-
-/* ===========================
-   TRIAL PRESENTATION
-   =========================== */
-const fix = document.getElementById('fix');
-const fb  = document.getElementById('fb');
-const banner = document.getElementById('modeBanner');
-
-function nextTrial(){
-  state.i++;
-  const plan = (state.planRef === 'practice') ? state.practicePlan : state.mainPlan;
-
-  if (state.i >= plan.length){
-    // end of plan
-    if (state.planRef === 'practice'){
-      show('break');
-      document.getElementById('breakTitle').textContent = 'Practice complete';
-      document.getElementById('breakMsg').textContent = 'When you’re ready, start the main task.';
-      setProgress('');
-      return;
-    } else {
-      endExperiment();
-      return;
-    }
-  }
-
-  // update progress
-  if (state.planRef === 'practice'){
-    setProgress(`Practice ${state.i+1}/${plan.length}`);
-  } else {
-    setProgress(`Trial ${state.i+1}/${state.mainPlan.length}`);
-  }
-
-  // fixation
-  fb.hidden = true;
-  fix.hidden = false;
-  drawFixOnly();
-  setTimeout(() => {
-    fix.hidden = true;
-    // show stimulus
-    state.current = plan[state.i];
-    drawTrial(state.current);
-    state.onset = performance.now();
-    // start timeout
-    clearTimeout(state.timeoutHandle);
-    state.timeoutHandle = setTimeout(() => {
-      registerResponse('timeout');
-    }, MAX_RT_MS);
-  }, FIX_MS);
-}
-function drawFixOnly(){
-  clearCanvas();
-  // (fixation element already visible; canvas is blank)
-}
-
-function registerResponse(tag){
-  // avoid double entry
-  clearTimeout(state.timeoutHandle);
-  state.timeoutHandle = null;
-
-  const now = performance.now();
-  const rt = (tag === 'timeout') ? null : Math.round(now - state.onset);
-
-  const trial = state.current;
-  const correctTag = (trial.condition === 'same') ? 'same' : 'mirror';
-  const correct = (tag === correctTag) ? 1 : 0;
-
-  // feedback only during practice
-  if (state.planRef === 'practice'){
-    fb.hidden = false;
-    if (tag === 'timeout'){ fb.textContent = 'Too slow'; fb.className = 'feedback slow'; }
-    else if (correct){ fb.textContent = 'Correct'; fb.className = 'feedback ok'; }
-    else { fb.textContent = 'Incorrect'; fb.className = 'feedback bad'; }
-  }
-
-  // log row
-  const row = {
-    action: 'saveTrial',
-    participant_id: state.pid,
-    plan: state.planRef,
-    trial_index: state.i+1,
-    angle_deg: trial.angle,
-    condition: trial.condition, // 'same' | 'mirror'
-    mirrored_side: trial.mirroredSide,
-    response: tag,              // 'same' | 'mirror' | 'timeout'
-    accuracy: (tag==='timeout') ? 0 : correct,
-    rt_ms: rt,
-    ts: new Date().toISOString(),
-    device: state.device
-  };
-  state.data.push(row);
-  saveRow(row); // fire and forget
-
-  // Short ITI then next
-  setTimeout(() => {
-    fb.hidden = true;
-    nextTrial();
-  }, (state.planRef === 'practice') ? 700 : ITI_MS);
-}
-
-/* ===========================
-   START / PRACTICE / MAIN / END
-   =========================== */
-async function startExperiment(){
-  const custom = document.getElementById('custom-id').value.trim();
-  state.pid = await getNewId(custom || null);
-
-  // build plans
-  state.practicePlan = buildPracticePlan(state.pid);
-  state.mainPlan     = buildMainPlan(state.pid);
-
-  // device info
-  document.getElementById('deviceInfo').textContent = navigator.userAgent;
-
-  // screens
-  show('practice');
-  banner.style.display = 'block'; // visible during practice and main
-}
-function beginPractice(){
-  state.planRef = 'practice';
-  state.i = -1;
-  show('stage');
-  nextTrial();
-}
-function startMain(){
-  state.planRef = 'main';
-  state.i = -1;
-  show('stage');
-  nextTrial();
-}
-async function endExperiment(){
-  show('done');
-  setProgress('');
-  const n = state.mainPlan.length;
-  const ok = state.data.filter(d => d.plan === 'main' && d.accuracy===1).length;
-  const rts = state.data.filter(d => d.plan === 'main' && d.rt_ms!=null).map(d=>d.rt_ms);
-  const mean = rts.length ? Math.round(rts.reduce((a,b)=>a+b,0)/rts.length) : null;
-  document.getElementById('summary').innerHTML =
-    `Trials: ${n} • Correct: ${ok} • Mean RT: ${mean ?? '—'} ms<br>Participant: <b>${state.pid}</b>`;
-
-  // summary to Sheets
-  await saveSummary({
-    participant_id: state.pid,
-    total_trials: n,
-    total_correct: ok,
-    mean_rt: mean,
-    completion_time: new Date().toISOString(),
-    device: state.device
-  });
-}
-
-/* ===========================
-   DOWNLOAD CSV (backup)
-   =========================== */
-document.getElementById('downloadCsv').addEventListener('click', () => {
-  if (!state.data.length){ alert('No data'); return; }
-  const headers = Object.keys(state.data[0]);
-  const csv = [
-    headers.join(','),
-    ...state.data.map(r => headers.map(h => {
-      const v = r[h];
-      if (v==null) return '';
-      const s = String(v);
-      return (s.includes(',') || s.includes('"')) ? `"${s.replace(/"/g,'""')}"` : s;
-    }).join(','))
-  ].join('\n');
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `mental_rotation_${state.pid}.csv`;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-});
-
-/* ===========================
-   WIRING
-   =========================== */
-document.getElementById('startBtn').addEventListener('click', startExperiment);
-document.getElementById('beginPractice').addEventListener('click', beginPractice);
-document.getElementById('startMain').addEventListener('click', startMain);
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-const stageBox = document.getElementById('stageBox');
-stageBox.addEventListener('touchstart', onTouchStart, { passive:false });
-stageBox.addEventListener('touchend', onTouchEnd, { passive:false });
-window.addEventListener('keydown', onKeyDown);
-</script>
+  <!-- Config first, then logic -->
+  <script src="config.js"></script>
+  <script src="mrt.js"></script>
 </body>
 </html>
