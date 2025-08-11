@@ -7,27 +7,34 @@
   <style>
     html, body { height: 100%; margin: 0; background: #000; color: #fff; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; }
     #stage { position: fixed; inset: 0; background: #000; display: grid; place-items: center; }
-    #pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4vmin; width: 100%; height: 100%; align-items: center; justify-items: center; }
-    canvas { background: #000; display: block; }
+
+    /* Single centered canvas */
+    canvas { background: #000; display: block; touch-action: manipulation; }
+
+    /* HUD */
     #hud { position: fixed; top: 10px; left: 10px; right: 10px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
     .chip { background: #111; border: 1px solid #333; border-radius: 20px; padding: 6px 12px; font-size: 14px; color: #ddd; margin-right: 8px; }
     #legend { pointer-events: auto; }
     #legend kbd { background: #222; border: 1px solid #444; border-radius: 4px; padding: 2px 6px; font-weight: 700; }
-    /* full-screen overlay */
+
+    /* Fullscreen overlay */
     #fs-overlay { position: fixed; inset: 0; background: #000; color: #fff; display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 10000; text-align: center; padding: 24px; }
     #fs-overlay h1 { margin: 0 0 12px; font-size: 28px; }
     #fs-overlay p { max-width: 720px; color: #bbb; }
     #fs-overlay button { padding: 12px 22px; border-radius: 8px; border: 0; font-weight: 700; cursor: pointer; margin-top: 16px; }
-    /* instruction box */
+
+    /* Instruction box */
     #ibox { position: fixed; z-index: 9000; max-width: 760px; width: min(92%, 760px); left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(20,20,20,0.96); border: 1px solid #333; border-radius: 12px; padding: 18px 22px; display: none; }
     #ibox h2 { margin: 0 0 10px; }
     #ibox p { color: #ddd; line-height: 1.5; }
     #ibox .btnrow { margin-top: 14px; text-align: center; }
     .btn { background: #667eea; border: 0; color: #fff; border-radius: 24px; padding: 10px 22px; font-weight: 700; cursor: pointer; }
     .btn.secondary { background: #444; }
-    /* feedback */
+
+    /* Feedback */
     #feedback { position: fixed; left: 50%; top: 14%; transform: translateX(-50%); font-size: 28px; font-weight: 800; display: none; }
-    /* touch buttons */
+
+    /* Touch bar (optional) */
     #touchbar { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
     .tbtn { pointer-events: auto; background: #111; border: 1px solid #444; color: #fff; border-radius: 10px; padding: 12px 16px; font-weight: 700; min-width: 120px; text-align: center; }
     .muted { color: #9aa; }
@@ -55,7 +62,7 @@
     <h1>Mental Rotation Task</h1>
     <p>
       You’ll see two <strong>R</strong> letters side by side at different rotations.
-      Decide if they are the <em>same</em> or a <em>mirror</em> image. Press <strong>F</strong> for Same and <strong>J</strong> for Mirror.<br><br>
+      Decide if they are the <em>same</em> or a <em>mirror</em> pair. Press <strong>F</strong> for Same and <strong>J</strong> for Mirror.<br><br>
       The task will run in fullscreen for consistency. Click Start to begin, then you’ll do a short practice.
     </p>
     <button id="fs-start">Start (Fullscreen)</button>
@@ -76,12 +83,9 @@
     </div>
   </div>
 
-  <!-- Stage and pair -->
+  <!-- Stage with single canvas -->
   <div id="stage">
-    <div id="pair">
-      <canvas id="leftCanvas"></canvas>
-      <canvas id="rightCanvas"></canvas>
-    </div>
+    <canvas id="sceneCanvas"></canvas>
   </div>
 
   <!-- Practice feedback -->
