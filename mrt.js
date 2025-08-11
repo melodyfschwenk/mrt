@@ -357,6 +357,8 @@ function nextTrial(){
       timestamp: new Date().toISOString()
     });
 
+    notifyParentIfEmbedded({ completed: true });
+
     ibox.innerHTML = `
       <h2>Task complete</h2>
       <p>Thank you! Your responses were saved.</p>
