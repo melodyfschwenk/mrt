@@ -1,6 +1,6 @@
 // config.js
 window.MRT_CONFIG = {
-  SHEETS_URL: 'PASTE_YOUR_WEB_APP_URL_HERE', // <-- replace this line
+  SHEETS_URL: 'https://script.google.com/macros/s/AKfycbySbIYESXF74p4QXK7BfKyLo8rLWXiMKa5b0jKB66DYLXGK6ZmptUSZmALr7w9ME15Tag/exec', // <-- replace this line
 
   // 7 angles, equal interval, includes 0 and 180
   ANGLES: [0, 30, 60, 90, 120, 150, 180],
