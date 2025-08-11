@@ -1,4 +1,4 @@
-/* mrt.js */
+/* mrt.js — single-canvas, central fixation, closer letters */
 (() => {
   const CFG = window.MRT_CONFIG || {};
   const qs = new URLSearchParams(location.search);
@@ -7,8 +7,7 @@
   const RNG_SEED = hashCode(SESSION_CODE || PARTICIPANT_ID || (Date.now() + ''));
 
   // ---------- DOM ----------
-  const leftCanvas  = document.getElementById('leftCanvas');
-  const rightCanvas = document.getElementById('rightCanvas');
+  const canvas      = document.getElementById('sceneCanvas');
   const fsOverlay   = document.getElementById('fs-overlay');
   const fsBtn       = document.getElementById('fs-start');
   const ibox        = document.getElementById('ibox');
@@ -16,7 +15,6 @@
   const feedbackEl  = document.getElementById('feedback');
   const phaseChip   = document.getElementById('phaseChip');
   const progressChip= document.getElementById('progressChip');
-
   const touchSame   = document.getElementById('touchSame');
   const touchMirror = document.getElementById('touchMirror');
 
@@ -51,11 +49,8 @@
   }
 
   function computeCanvasSide(){
-    const w = window.innerWidth, h = window.innerHeight;
-    const gap = Math.max(w, h) * 0.04;
-    const eachW = (w - gap) / 2;
-    const eachH = h * 0.9;
-    return Math.floor(Math.min(eachW, eachH));
+    const s = Math.min(window.innerWidth, window.innerHeight) * (CFG.CANVAS_FILL_FRAC ?? 0.9);
+    return Math.floor(s);
   }
 
   function sizeCanvasSquare(canvas, sideCssPx){
@@ -79,16 +74,23 @@
     return Math.max(minPx, Math.round(sideCssPx * scale));
   }
 
-  function drawR(ctx, side, angleDeg, mirror=false){
+  function drawCenteredFixation(ctx, side){
+    ctx.clearRect(0, 0, side, side);
+    ctx.fillStyle = CFG.BG;
+    ctx.fillRect(0, 0, side, side);
+    const s = Math.round(side * 0.03);
+    const cx = side/2, cy = side/2;
+    ctx.fillStyle = CFG.FG;
+    ctx.fillRect(cx - 1, cy - s, 2, s*2);
+    ctx.fillRect(cx - s, cy - 1, s*2, 2);
+  }
+
+  function drawR(ctx, side, x, y, angleDeg, mirror=false){
     const letterPx = getLetterPx(side);
     const margin = CFG.LETTER_MARGIN_PX ?? 0;
 
     ctx.save();
-    ctx.clearRect(0, 0, side, side);
-    ctx.fillStyle = CFG.BG;
-    ctx.fillRect(0, 0, side, side);
-
-    ctx.translate(side/2, side/2);
+    ctx.translate(x, y);
     ctx.rotate(angleDeg * Math.PI / 180);
     if (mirror) ctx.scale(-1, 1);
 
@@ -104,15 +106,22 @@
 
   function layoutAndDraw(current){
     const side = computeCanvasSide();
-    const lctx = sizeCanvasSquare(leftCanvas, side);
-    const rctx = sizeCanvasSquare(rightCanvas, side);
+    const ctx = sizeCanvasSquare(canvas, side);
 
-    drawR(lctx, side, current.leftAngle, current.leftMirror);
-    drawR(rctx, side, current.rightAngle, current.rightMirror);
+    // Clear background
+    ctx.fillStyle = CFG.BG;
+    ctx.fillRect(0, 0, side, side);
+
+    // Positions: two letters horizontally around the center
+    const sepFrac = Math.max(0.08, Math.min(0.6, CFG.LETTER_SEPARATION_FRAC ?? 0.22));
+    const sepPx = side * sepFrac;
+    const cx = side/2, cy = side/2;
+    const leftX  = cx - sepPx/2;
+    const rightX = cx + sepPx/2;
+
+    drawR(ctx, side, leftX,  cy, current.leftAngle,  current.leftMirror);
+    drawR(ctx, side, rightX, cy, current.rightAngle, current.rightMirror);
   }
-
-  function showIbox(){ ibox.style.display = 'block'; }
-  function hideIbox(){ ibox.style.display = 'none'; }
 
   function showFeedback(txt, color){
     feedbackEl.textContent = txt;
@@ -131,13 +140,11 @@
       for (const cond of ['same','mirror']) {
         for (let i=0;i<CFG.TRIALS_PER_ANGLE_PER_COND;i++){
           const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
-          const t = {
+          trials.push({
             condition: cond, angle,
-            // Both images share the same rotation angle (classic MRT logic)
             leftAngle: angle,  leftMirror: mirrorLeft,
             rightAngle: angle, rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
-          };
-          trials.push(t);
+          });
         }
       }
     }
@@ -145,7 +152,6 @@
   }
 
   function makePracticeTrials(n){
-    // Balanced quick mix of angles & conditions
     const angles = shuffle([...CFG.ANGLES], state.rng);
     const base = [];
     for (let i=0;i<Math.min(angles.length, Math.ceil(n/2)); i++){
@@ -173,10 +179,7 @@
       user_agent: navigator.userAgent,
       ...payload,
     };
-    if (!CFG.SHEETS_URL || CFG.SHEETS_URL.includes('PASTE_YOUR_WEB_APP_URL_HERE')) {
-      // Not configured yet
-      return;
-    }
+    if (!CFG.SHEETS_URL || CFG.SHEETS_URL.includes('PASTE_YOUR_WEB_APP_URL_HERE')) return;
     try {
       await fetch(CFG.SHEETS_URL, {
         method: 'POST',
@@ -184,14 +187,12 @@
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(body)
       });
-    } catch(e) {
-      // Silent fail (offline ok) – local-only
-    }
+    } catch(e) { /* offline / silent */ }
   }
 
   // ---------- Flow ----------
   function startPractice(){
-    hideIbox();
+    ibox.style.display = 'none';
     state.practice = true;
     state.block = 'practice';
     state.trialIndex = 0;
@@ -212,24 +213,20 @@
   }
 
   function nextTrial(){
-    // Clean handlers
     if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
     if (state.timer) { clearTimeout(state.timer); state.timer = null; }
 
-    // Pull trial
     const list = state.practice ? state.practiceTrials : state.mainTrials;
     if (state.trialIndex >= list.length) {
       if (state.practice) {
-        // Transition screen
         showFeedback('Practice complete', '#4caf50');
         setTimeout(() => {
-          // short countdown then main
           ibox.innerHTML = `
             <h2>Main Task</h2>
             <p>You’ll now begin the main block (${state.mainTrials.length} trials). No feedback will be shown.</p>
             <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
           ibox.style.display = 'block';
-          document.getElementById('beginMainBtn').onclick = () => { hideIbox(); startMain(); };
+          document.getElementById('beginMainBtn').onclick = () => { ibox.style.display = 'none'; startMain(); };
         }, 500);
       } else {
         finishTask();
@@ -239,8 +236,11 @@
 
     state.current = list[state.trialIndex];
 
-    // Fixation
-    drawFixation();
+    // Fixation (single central)
+    const side = computeCanvasSide();
+    const ctx = sizeCanvasSquare(canvas, side);
+    drawCenteredFixation(ctx, side);
+
     setTimeout(() => {
       // Stimulus
       layoutAndDraw(state.current);
@@ -254,43 +254,19 @@
       touchSame.onclick = ()=> handleResponse('same');
       touchMirror.onclick = ()=> handleResponse('mirror');
 
-      state.timer = setTimeout(()=> {
-        // timeout: no response
-        handleResponse('none');
-      }, CFG.MAX_RT_MS);
+      state.timer = setTimeout(()=> handleResponse('none'), CFG.MAX_RT_MS);
 
     }, CFG.FIXATION_MS);
 
-    // HUD
     const total = state.practice ? CFG.PRACTICE_TRIALS : state.mainTrials.length;
     setProgress(state.trialIndex + 1, total);
-  }
-
-  function drawFixation(){
-    const side = computeCanvasSide();
-    const lctx = sizeCanvasSquare(leftCanvas, side);
-    const rctx = sizeCanvasSquare(rightCanvas, side);
-
-    // simple white plus at center of each canvas
-    const drawPlus = (ctx) => {
-      const s = Math.round(side * 0.03);
-      ctx.clearRect(0, 0, side, side);
-      ctx.fillStyle = CFG.BG; ctx.fillRect(0, 0, side, side);
-      ctx.fillStyle = CFG.FG;
-      ctx.fillRect(side/2 - 1, side/2 - s, 2, s*2);
-      ctx.fillRect(side/2 - s, side/2 - 1, s*2, 2);
-    };
-    drawPlus(lctx); drawPlus(rctx);
   }
 
   function handleKey(ev){
     const k = (ev.key || '').toLowerCase();
     if (k === 'f') handleResponse('same');
     else if (k === 'j') handleResponse('mirror');
-    else {
-      // ignore other keys; allow another keypress within the window
-      window.addEventListener('keydown', state.onKey = (e)=>handleKey(e), { once: true });
-    }
+    else window.addEventListener('keydown', state.onKey = (e)=>handleKey(e), { once: true });
   }
 
   function handleResponse(choice){
@@ -298,11 +274,10 @@
     if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
 
     const cur = state.current;
-    const correctAnswer = cur.condition; // 'same' or 'mirror'
+    const correctAnswer = cur.condition;
     const rt = (choice === 'none') ? null : Math.round(performance.now() - state.onsetTs);
     const acc = (choice === correctAnswer) ? 1 : 0;
 
-    // Log
     const row = {
       block: state.block,
       trial_index: state.trialIndex + 1,
@@ -321,14 +296,12 @@
     state.data.push(row);
     sendToSheets(row);
 
-    // Practice feedback
     if (state.practice) {
       if (choice === 'none') showFeedback('Too slow', '#ff9800');
       else if (acc === 1)   showFeedback('Correct', '#4caf50');
       else                  showFeedback('Incorrect', '#f44336');
     }
 
-    // ITI → next trial
     setTimeout(() => {
       state.trialIndex += 1;
       nextTrial();
@@ -339,7 +312,6 @@
     setPhase('Complete');
     setProgress(state.mainTrials.length, state.mainTrials.length);
 
-    // summary row
     const answered = state.data.filter(r => r.block === 'main' && r.response !== 'none');
     const nMain = state.mainTrials.length;
     const acc = answered.length ? (answered.filter(r=>r.accuracy===1).length / answered.length * 100).toFixed(1) : '—';
@@ -369,21 +341,23 @@
   fsBtn.addEventListener('click', async () => {
     await enterFullscreenIfPossible();
     fsOverlay.style.display = 'none';
-    // show instructions
     ibox.style.display = 'block';
   });
 
   startPracticeBtn.addEventListener('click', startPractice);
 
   window.addEventListener('resize', () => {
-    // re-draw current view to keep crisp after resize
     if (state.current) layoutAndDraw(state.current);
+    else {
+      const side = computeCanvasSide();
+      sizeCanvasSquare(canvas, side);
+    }
   });
   document.addEventListener('fullscreenchange', () => {
     if (state.current) layoutAndDraw(state.current);
   });
 
-  // Touch buttons → map to responses
+  // Touch buttons
   if (touchSame)   touchSame.addEventListener('click', ()=> handleResponse('same'));
   if (touchMirror) touchMirror.addEventListener('click', ()=> handleResponse('mirror'));
 
