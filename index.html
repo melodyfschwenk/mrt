@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+  <title>Mental Rotation (R vs Mirrored)</title>
+  <style>
+    :root { --fg:#222; --muted:#666; --ok:#2e7d32; --bad:#c62828; --warn:#cc6600; --accent:#1976d2; }
+    html, body { margin:0; padding:0; height:100%; background:#fff; color:var(--fg); font-family: Arial, Helvetica, sans-serif; touch-action:none; }
+    #app { position:relative; width:100%; max-width:880px; height:100dvh; margin:0 auto;
+           display:flex; align-items:center; justify-content:center; }
+    .screen { display:none; text-align:center; padding:20px; }
+    .screen.active { display:block; }
+
+    .button { background:#4CAF50; color:#fff; border:0; border-radius:8px; padding:12px 20px; font-size:16px; cursor:pointer; }
+    .button:disabled { background:#bbb; cursor:not-allowed; }
+    .secondary { background:#e0e0e0; color:#333; }
+
+    .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+    .progress { position:absolute; top:10px; right:12px; font-size:14px; color:var(--muted); }
+    .top-left { position:absolute; top:10px; left:12px; font-size:14px; color:var(--muted); }
+
+    .stage {
+      width: 520px; height: 520px; margin: 0 auto; position: relative;
+      display: flex; align-items: center; justify-content: center;
+      border: 2px solid #ddd; border-radius: 12px; background: #fff;
+      user-select:none; -webkit-user-select:none; touch-action:none;
+    }
+    .fix { font-size:64px; line-height:1; display:none; }
+    .letter {
+      display:none;
+      font-size: 360px; line-height: 1; font-weight: 900;
+      font-family: Arial Black, Impact, Arial, Helvetica, sans-serif;
+      transform-origin: 50% 50%;
+      /* Hinting: make it crisp */
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      user-select:none;
+    }
+
+    /* Practice helper overlay */
+    #helper { position:absolute; inset:auto 0 8px 0; display:none; pointer-events:none; }
+    #badge {
+      display:inline-block; padding:6px 10px; border-radius:6px; font-weight:bold; color:#fff; margin-bottom:6px;
+      background:#673ab7;
+    }
+    #legend { display:inline-block; background:rgba(255,255,255,.95); border:1px solid #eee; border-radius:6px; padding:8px 10px; font-size:14px; color:#333; }
+    #legend code { background:#f6f6f6; border:1px solid #eee; padding:1px 4px; border-radius:4px; }
+
+    /* Orientation guard for phones/tablets */
+    #rotate {
+      position:fixed; inset:0; background:#fff; display:none; z-index:999;
+      align-items:center; justify-content:center; text-align:center; padding:20px;
+    }
+    @media (orientation: portrait) and (hover:none) and (pointer:coarse) {
+      #rotate { display:flex; }
+    }
+
+    /* Debug (toggle with ?debug=true) */
+    #debug { position:fixed; left:8px; bottom:8px; background:rgba(255,255,255,.95); border:1px solid #eee; padding:6px 8px; font-size:11px; max-width:320px; display:none; }
+    #debug.active { display:block; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="progress" id="progress"></div>
+    <div class="top-left" id="trialCount"></div>
+
+    <!-- Welcome / Controls -->
+    <div class="screen active" id="welcome">
+      <h2>Mental Rotation Task</h2>
+      <p>Decide whether the rotated letter is a normal <b>R</b> or a <b>mirrored</b> R.</p>
+      <p><b>Keyboard:</b> → = Normal &nbsp;&nbsp; ← = Mirrored &nbsp; (F = Normal, J = Mirrored)</p>
+      <p><b>Touch:</b> Swipe → = Normal &nbsp;&nbsp; Swipe ← = Mirrored</p>
+      <p class="hint">There will be a short practice first. Try to respond quickly and accurately.</p>
+      <div style="margin-top:16px;">
+        <label>Trials per condition (per angle × mirror):&nbsp;
+          <select id="perCell">
+            <option value="4">4 (56 trials)</option>
+            <option value="6" selected>6 (84 trials)</option>
+            <option value="8">8 (112 trials)</option>
+          </select>
+        </label>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="button" id="start">Start</button>
+      </div>
+    </div>
+
+    <!-- Instructions between phases -->
+    <div class="screen" id="instructions">
+      <div id="instText" style="max-width:680px; margin:0 auto; text-align:left; line-height:1.6;"></div>
+      <div style="margin-top:16px;"><button class="button" id="instContinue">Continue</button></div>
+    </div>
+
+    <!-- Stimulus -->
+    <div class="screen" id="stim">
+      <div class="stage" id="swipeArea" aria-label="Swipe area">
+        <div class="fix" id="fix">+</div>
+        <div class="letter" id="letter">R</div>
+
+        <!-- Practice helper -->
+        <div id="helper">
+          <div id="badge">Practice</div>
+          <div id="legend">
+            <div><b>Respond:</b> <code>→</code> Normal &nbsp; <code>←</code> Mirrored</div>
+            <div class="hint" style="margin-top:4px;">(Swipe → or ← on touch devices)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback & Completion -->
+    <div class="screen" id="fb">
+      <div id="fbText" style="font-size:22px; margin:16px 0;"></div>
+      <div style="margin-top:10px;">
+        <button class="button secondary" id="dl" style="display:none;">Download CSV</button>
+        <button class="button" id="next" style="display:none;">Next</button>
+      </div>
+      <div class="hint" id="summaryHint" style="display:none; margin-top:10px;">CSV includes angle, mirror, RT, accuracy, and timestamps.</div>
+    </div>
+
+    <!-- Rotate guard -->
+    <div id="rotate">
+      <div>
+        <h3>Please rotate your device</h3>
+        <p>This task works best in landscape.</p>
+      </div>
+    </div>
+
+    <!-- Debug -->
+    <div id="debug"></div>
+  </div>
+
+  <script>
+    /******** config ********/
+    const ANGLES = [0,30,60,90,120,150,180]; // 7 angles
+    const PRACTICE_TRIALS = 8;               // quick warm-up
+    const FIX_MS = 500;
+    const MAX_RT = 5000;                     // timeout (ms)
+    const ITI_MS = 300;
+
+    const urlParams = new URLSearchParams(location.search);
+    const DEBUG = urlParams.get('debug') === 'true';
+
+    /******** state ********/
+    const state = {
+      phase: 'welcome', // welcome | practice | main | done
+      trials: [],
+      practice: [],
+      idx: 0,
+      pracIdx: 0,
+      waiting: false,
+      onset: 0,
+      timeoutId: null,
+      keyHandler: null,
+      touchArmed: false,
+      data: []
+    };
+
+    /******** elements ********/
+    const screens = {
+      welcome: document.getElementById('welcome'),
+      instructions: document.getElementById('instructions'),
+      stim: document.getElementById('stim'),
+      fb: document.getElementById('fb')
+    };
+    const progress = document.getElementById('progress');
+    const trialCount = document.getElementById('trialCount');
+    const instText = document.getElementById('instText');
+    const instContinue = document.getElementById('instContinue');
+    const fix = document.getElementById('fix');
+    const letter = document.getElementById('letter');
+    const fbText = document.getElementById('fbText');
+    const nextBtn = document.getElementById('next');
+    const dlBtn = document.getElementById('dl');
+    const helper = document.getElementById('helper');
+    const badge  = document.getElementById('badge');
+    const debugBox = document.getElementById('debug');
+    if (DEBUG) debugBox.classList.add('active');
+
+    function logd(s){ if (DEBUG) debugBox.innerHTML = new Date().toLocaleTimeString() + ' — ' + s + '<br>' + debugBox.innerHTML; }
+
+    /******** utils ********/
+    function show(id){
+      Object.values(screens).forEach(el => el.classList.remove('active'));
+      screens[id].classList.add('active');
+    }
+    function shuffle(a){
+      for(let i=a.length-1;i>0;i--){ const j = (Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
+      return a;
+    }
+    function buildTrials(perCell){
+      const trials = [];
+      for (const angle of ANGLES){
+        for (const mirrored of [0,1]){
+          for (let r=0;r<perCell;r++){
+            trials.push({ angle, mirrored });
+          }
+        }
+      }
+      return shuffle(trials);
+    }
+    function buildPractice(){
+      // 8 quick trials mixed across angles/mirroring
+      const cells = [];
+      for (const angle of ANGLES){
+        for (const mirrored of [0,1]) cells.push({angle, mirrored});
+      }
+      return shuffle(cells).slice(0, PRACTICE_TRIALS);
+    }
+    function updateHUD(){
+      if (state.phase === 'practice'){
+        progress.textContent = `Practice ${state.pracIdx+1}/${state.practice.length}`;
+        trialCount.textContent = '';
+      } else if (state.phase === 'main'){
+        progress.textContent = `Trial ${state.idx+1}/${state.trials.length}`;
+        const done = state.data.filter(d=>d.block==='main').length;
+        trialCount.textContent = `Completed: ${done}/${state.trials.length}`;
+      } else {
+        progress.textContent = '';
+        trialCount.textContent = '';
+      }
+    }
+
+    /******** drawing ********/
+    function showFixation(){ letter.style.display='none'; fix.style.display='block'; }
+    function showLetter(angle, mirrored){
+      fix.style.display='none';
+      letter.style.display='block';
+      const sx = mirrored ? -1 : 1;
+      letter.style.transform = `scaleX(${sx}) rotate(${angle}deg)`;
+    }
+
+    /******** input ********/
+    function armResponse(){
+      state.waiting = true;
+      state.onset = performance.now();
+
+      state.keyHandler = (e)=>{
+        const key = e.key;
+        if (['ArrowLeft','ArrowRight','f','F','j','J'].includes(key)){
+          e.preventDefault();
+          let resp;
+          if (key === 'ArrowRight' || key === 'f' || key === 'F') resp = 'normal';
+          else if (key === 'ArrowLeft'  || key === 'j' || key === 'J') resp = 'mirror';
+          if (resp) handleResponse(resp);
+        }
+      };
+      document.addEventListener('keydown', state.keyHandler, { once:true });
+
+      state.timeoutId = setTimeout(()=> handleResponse('none'), MAX_RT);
+    }
+    function disarmResponse(){
+      state.waiting = false;
+      if (state.keyHandler){
+        document.removeEventListener('keydown', state.keyHandler);
+        state.keyHandler = null;
+      }
+      if (state.timeoutId){
+        clearTimeout(state.timeoutId);
+        state.timeoutId = null;
+      }
+    }
+
+    // Swipe mapping: → normal, ← mirror
+    (function bindSwipe(){
+      const area = document.getElementById('swipeArea');
+      let start = null;
+      const TH = 30;
+      area.addEventListener('pointerdown', e => { if (!state.waiting) return; start = {x:e.clientX, y:e.clientY}; });
+      area.addEventListener('pointerup', e => {
+        if (!state.waiting || !start) return;
+        const dx = e.clientX - start.x, dy = e.clientY - start.y;
+        start = null;
+        if (Math.abs(dx) < TH && Math.abs(dy) < TH) return; // tap → ignore
+        const resp = Math.abs(dx) >= Math.abs(dy) ? (dx>0 ? 'normal' : 'mirror') : null;
+        if (resp) handleResponse(resp);
+      });
+      area.addEventListener('contextmenu', e => e.preventDefault());
+    })();
+
+    /******** trial flow ********/
+    function doPracticeTrial(){
+      updateHUD();
+      const t = state.practice[state.pracIdx];
+      if (!t){ // practice over
+        show('instructions');
+        instText.innerHTML = `
+          <h3>Great — practice complete!</h3>
+          <p>Now the main task begins. Remember:</p>
+          <ul>
+            <li><b>→ / Swipe →</b> = Normal (not mirrored)</li>
+            <li><b>← / Swipe ←</b> = Mirrored</li>
+          </ul>
+          <p>Respond as quickly and accurately as you can.</p>`;
+        instContinue.onclick = ()=> {
+          state.phase = 'main';
+          state.idx = 0;
+          helper.style.display = 'none';
+          doMainTrial();
+        };
+        return;
+      }
+      helper.style.display = 'block'; // practice aids visible
+      badge.textContent = 'Practice';
+
+      show('stim');
+      showFixation();
+      setTimeout(()=>{
+        showLetter(t.angle, t.mirrored);
+        armResponse();
+      }, FIX_MS);
+    }
+
+    function doMainTrial(){
+      updateHUD();
+      const t = state.trials[state.idx];
+      if (!t){
+        endTask();
+        return;
+      }
+      show('stim');
+      showFixation();
+      setTimeout(()=>{
+        showLetter(t.angle, t.mirrored);
+        armResponse();
+      }, FIX_MS);
+    }
+
+    function handleResponse(resp){
+      if (!state.waiting) return;
+      disarmResponse();
+
+      const isPractice = (state.phase === 'practice');
+      const t = isPractice ? state.practice[state.pracIdx] : state.trials[state.idx];
+      const rt = (resp === 'none') ? null : Math.round(performance.now() - state.onset);
+
+      const correctAns = t.mirrored ? 'mirror' : 'normal';
+      const correct = (resp === correctAns) ? 1 : 0;
+
+      // log row
+      const row = {
+        block: isPractice ? 'practice' : 'main',
+        trial_index: isPractice ? (state.pracIdx+1) : (state.idx+1),
+        angle_deg: t.angle,
+        mirrored: t.mirrored ? 1 : 0,
+        response: resp,
+        correct_response: correctAns,
+        accuracy: (resp==='none') ? 0 : correct,
+        rt_ms: rt,
+        timestamp: new Date().toISOString()
+      };
+      state.data.push(row);
+
+      // practice feedback only
+      if (isPractice){
+        let msg, color;
+        if (resp === 'none'){ msg = 'Too slow — try to respond within 5 seconds'; color = 'var(--warn)'; }
+        else if (correct){ msg = 'Correct!'; color = 'var(--ok)'; }
+        else { msg = 'Incorrect'; color = 'var(--bad)'; }
+        fbText.textContent = msg; fbText.style.color = color;
+        nextBtn.style.display = 'none'; dlBtn.style.display = 'none'; document.getElementById('summaryHint').style.display='none';
+        show('fb');
+        setTimeout(()=>{
+          show('stim');
+          state.pracIdx += 1;
+          setTimeout(doPracticeTrial, ITI_MS);
+        }, 700);
+      } else {
+        // main: no feedback; advance
+        state.idx += 1;
+        setTimeout(doMainTrial, ITI_MS);
+      }
+    }
+
+    function endTask(){
+      state.phase = 'done';
+      const mainRows = state.data.filter(r => r.block==='main');
+      const n = mainRows.length;
+      const acc = n ? (mainRows.reduce((s,r)=> s + (r.accuracy||0), 0) / n * 100).toFixed(1) : '—';
+      const meanRt = n ? Math.round(mainRows.filter(r=>r.rt_ms!=null).reduce((s,r)=>s+r.rt_ms,0) / Math.max(1, mainRows.filter(r=>r.rt_ms!=null).length)) : '—';
+
+      fbText.innerHTML = `
+        <h3>All done — thank you!</h3>
+        <p>Overall accuracy: <b>${acc}%</b><br>Mean RT: <b>${meanRt}</b> ms</p>`;
+      fbText.style.color = '#333';
+      nextBtn.style.display = 'none';
+      dlBtn.style.display = 'inline-block';
+      document.getElementById('summaryHint').style.display='block';
+      show('fb');
+    }
+
+    /******** csv ********/
+    function toCSV(rows){
+      if (!rows.length) return '';
+      const headers = Object.keys(rows[0]);
+      const esc = v => {
+        if (v==null) return '';
+        const s = String(v);
+        return s.includes(',') || s.includes('"') || s.includes('\n')
+          ? `"${s.replace(/"/g,'""')}"`
+          : s;
+      };
+      return [
+        headers.join(','),
+        ...rows.map(r => headers.map(h => esc(r[h])).join(','))
+      ].join('\n');
+    }
+    function downloadCSV(){
+      const csv = toCSV(state.data);
+      const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mental_rotation_${Date.now()}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    /******** wiring ********/
+    document.getElementById('start').onclick = ()=>{
+      const perCell = parseInt(document.getElementById('perCell').value, 10);
+      state.practice = buildPractice();
+      state.trials = buildTrials(perCell);
+      state.phase = 'instructions';
+      instText.innerHTML = `
+        <h3>Instructions</h3>
+        <p>A letter <b>R</b> will appear at various rotations. It can be a normal R or a mirrored R.</p>
+        <ul>
+          <li><b>→ / Swipe →</b> if it is a <b>normal</b> R</li>
+          <li><b>← / Swipe ←</b> if it is a <b>mirrored</b> R</li>
+        </ul>
+        <p>Respond as quickly and accurately as possible. First, a short practice.</p>`;
+      instContinue.onclick = ()=>{
+        state.phase = 'practice';
+        state.pracIdx = 0;
+        show('stim');
+        doPracticeTrial();
+      };
+      show('instructions');
+    };
+    document.getElementById('dl').onclick = downloadCSV;
+
+    // init
+    (function init(){
+      logd('ready');
+    })();
+  </script>
+</body>
+</html>
