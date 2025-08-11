@@ -12,9 +12,9 @@ window.MRT_CONFIG = {
 
   // ===== Fullscreen & sizing =====
   CANVAS_FILL_FRAC: 0.9,         // fraction of the shorter viewport side used for canvas
-  LETTER_SIZE_MODE: 'scale',        // 'pt' | 'scale'
-  LETTER_PT: 16,                 // if 'pt'
-  LETTER_SCALE: 0.24,            // if 'scale' (fraction of canvas side)
+  LETTER_SIZE_MODE: 'pt',        // 'pt' | 'scale'
+  LETTER_PT: 18,                 // if 'pt'
+  LETTER_SCALE: 0.20,            // if 'scale' (fraction of canvas side)
   LETTER_SEPARATION_FRAC: 0.22,  // fraction of canvas width between letter centers (↓ = closer)
 
   FONT_FAMILY: "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
