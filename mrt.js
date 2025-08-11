@@ -1,5 +1,8 @@
 /* mrt.js — single-canvas, central fixation, closer letters */
+
 (() => {
+  // Add this at the very start
+  const isEmbedded = (window !== window.top);
   const CFG = window.MRT_CONFIG || {};
   const qs = new URLSearchParams(location.search);
   const SESSION_CODE = (qs.get('code') || '').toUpperCase();
@@ -34,6 +37,21 @@
     rng: mulberry32(RNG_SEED),
   };
 
+  // Helper to notify parent window if embedded
+function notifyParentIfEmbedded(message) {
+  if (window !== window.top) {
+    // We're in an iframe
+    try {
+      window.parent.postMessage({
+        type: 'task-complete',
+        taskCode: 'MRT',
+        ...message
+      }, '*');  // You can restrict origin for security if needed
+    } catch(e) {
+      console.log('Could not communicate with parent:', e);
+    }
+  }
+}
   // ---------- Utils ----------
   function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}}
   function hashCode(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;}return Math.abs(h)||1;}
