@@ -152,6 +152,7 @@
   }
 
   function makePracticeTrials(n){
+    n = Number.isFinite(+n) && +n > 0 ? +n : 10;
     const angles = shuffle([...CFG.ANGLES], state.rng);
     const base = [];
     for (let i=0;i<Math.min(angles.length, Math.ceil(n/2)); i++){
@@ -198,7 +199,7 @@
     state.trialIndex = 0;
     state.practiceTrials = makePracticeTrials(CFG.PRACTICE_TRIALS);
     setPhase('Practice');
-    setProgress(0, CFG.PRACTICE_TRIALS);
+    setProgress(0, state.practiceTrials.length);
     nextTrial();
   }
 
@@ -217,25 +218,32 @@ function nextTrial(){
   if (state.timer) { clearTimeout(state.timer); state.timer = null; }
 
   const list = state.practice ? state.practiceTrials : state.mainTrials;
-  if (state.practice) {
-  showFeedback('Practice complete', '#4caf50');
-  setTimeout(() => {
-    // Prebuild main trials so we can show the real count
-    if (!state.mainTrials.length) state.mainTrials = makeMainTrials();
-    const mainCount = state.mainTrials.length;
 
-    ibox.innerHTML = `
-      <h2>Main Task</h2>
-      <p>You’ll now begin the main block (${mainCount} trials). No feedback will be shown.</p>
-      <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
-    ibox.style.display = 'block';
-    document.getElementById('beginMainBtn').onclick = () => { 
-      ibox.style.display = 'none'; 
-      startMain(); 
-    };
-  }, 500);
-  return;
-}
+  // ✅ Only end a block after all its trials are done
+  if (state.trialIndex >= list.length) {
+    if (state.practice) {
+      showFeedback('Practice complete', '#4caf50');
+      setTimeout(() => {
+        // Prebuild main so the count isn’t (0)
+        if (!state.mainTrials.length) state.mainTrials = makeMainTrials();
+        const mainCount = state.mainTrials.length;
+
+        ibox.innerHTML = `
+          <h2>Main Task</h2>
+          <p>You’ll now begin the main block (${mainCount} trials). No feedback will be shown.</p>
+          <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
+        ibox.style.display = 'block';
+        document.getElementById('beginMainBtn').onclick = () => { 
+          ibox.style.display = 'none'; 
+          startMain(); 
+        };
+      }, 500);
+    } else {
+      finishTask();
+    }
+    return;
+  }
+
 
 
   state.current = list[state.trialIndex];
@@ -262,7 +270,7 @@ function nextTrial(){
     state.timer = setTimeout(() => handleResponse('none'), CFG.MAX_RT_MS);
   }, CFG.FIXATION_MS);
 
-  const total = state.practice ? CFG.PRACTICE_TRIALS : state.mainTrials.length;
+  const total = state.practice ? state.practiceTrials.length : state.mainTrials.length;
   setProgress(state.trialIndex + 1, total);
 }
 
