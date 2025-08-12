@@ -382,7 +382,9 @@ function nextTrial(){
     }
   });
 
-  startPracticeBtn.addEventListener('click', startPractice);
+  const startPracticeHandler = () => startPractice();
+  startPracticeBtn.addEventListener('click', startPracticeHandler);
+  startPracticeBtn.addEventListener('pointerup', startPracticeHandler);
 
   window.addEventListener('resize', () => {
     if (state.current) layoutAndDraw(state.current);
