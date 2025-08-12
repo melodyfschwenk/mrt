@@ -372,9 +372,14 @@ function nextTrial(){
 
   // ---------- Start / Resize ----------
   fsBtn.addEventListener('click', async () => {
-    await enterFullscreenIfPossible();
-    fsOverlay.style.display = 'none';
-    ibox.style.display = 'block';
+    try {
+      if (!isEmbedded) await enterFullscreenIfPossible();
+    } catch (_) {
+      // Ignore fullscreen errors
+    } finally {
+      fsOverlay.style.display = 'none';
+      ibox.style.display = 'block';
+    }
   });
 
   startPracticeBtn.addEventListener('click', startPractice);
