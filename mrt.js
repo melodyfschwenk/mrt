@@ -360,12 +360,11 @@ function nextTrial(){
     notifyParentIfEmbedded({ completed: true });
 
     ibox.innerHTML = `
-      <h2>Task complete</h2>
-      <p>Thank you! Your responses were saved.</p>
-      <p><strong>Accuracy:</strong> ${acc}% &nbsp; | &nbsp; <strong>Mean RT:</strong> ${meanRt} ms</p>
-      <div class="btnrow">
-        <button class="btn secondary" id="closeBtn">Close</button>
-      </div>`;
+  <h2>Task complete</h2>
+  <p>Thank you for completing the task!</p>
+  <div class="btnrow">
+    <button class="btn secondary" id="closeBtn">Close</button>
+  </div>`;
     ibox.style.display = 'block';
     document.getElementById('closeBtn').onclick = () => { ibox.style.display = 'none'; };
   }
