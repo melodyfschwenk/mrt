@@ -189,25 +189,27 @@ function notifyParentIfEmbedded(message) {
   }
 
   // ---------- Google Sheets ----------
-  async function sendToSheets(payload){
-    const body = {
-      action: 'trial',
-      version: CFG.VERSION,
-      session_code: SESSION_CODE || '',
-      participant_id: PARTICIPANT_ID || '',
-      user_agent: navigator.userAgent,
-      ...payload,
-    };
-    if (!CFG.SHEETS_URL || CFG.SHEETS_URL.includes('PASTE_YOUR_WEB_APP_URL_HERE')) return;
-    try {
-      await fetch(CFG.SHEETS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify(body)
-      });
-    } catch(e) { /* offline / silent */ }
-  }
+ async function sendToSheets(payload){
+  const body = {
+    action: 'trial',
+    version: CFG.VERSION,
+    session_code: SESSION_CODE || '',
+    participant_id: PARTICIPANT_ID || '',
+    user_agent: navigator.userAgent,
+    ...payload,
+  };
+  
+  if (!CFG.SHEETS_URL) return;  // Only check if URL exists
+  
+  try {
+    await fetch(CFG.SHEETS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+  } catch(e) { /* silent */ }
+}
 
   // ---------- Flow ----------
   function startPractice(){
