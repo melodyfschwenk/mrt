@@ -1,4 +1,4 @@
-/* mrt.js — single-canvas, central fixation, closer letters */
+/* mrt.js — single-canvas, central fixation, closer letters, with initials */
 
 (() => {
   // Add this at the very start
@@ -6,13 +6,16 @@
   const CFG = window.MRT_CONFIG || {};
   const qs = new URLSearchParams(location.search);
   const SESSION_CODE = (qs.get('code') || '').toUpperCase();
-  const PARTICIPANT_ID = qs.get('pid') || '';
-  const RNG_SEED = hashCode(SESSION_CODE || PARTICIPANT_ID || (Date.now() + ''));
+  
+  // Will be set from the initials input
+  let PARTICIPANT_ID = '';
+  let RNG_SEED = 0;
 
   // ---------- DOM ----------
   const canvas      = document.getElementById('sceneCanvas');
   const fsOverlay   = document.getElementById('fs-overlay');
   const fsBtn       = document.getElementById('fs-start');
+  const initialsInput = document.getElementById('initialsInput');
   const ibox        = document.getElementById('ibox');
   const startPracticeBtn = document.getElementById('startPracticeBtn');
   const feedbackEl  = document.getElementById('feedback');
@@ -34,24 +37,48 @@
     data: [],
     block: 'practice',
     started: false,
-    rng: mulberry32(RNG_SEED),
+    rng: null, // Will be set after getting initials
   };
 
+  // Enable/disable start button based on initials input
+  initialsInput.addEventListener('input', (e) => {
+    const value = e.target.value.trim();
+    fsBtn.disabled = value.length < 2;
+    
+    // Auto-uppercase
+    if (value !== value.toUpperCase()) {
+      e.target.value = value.toUpperCase();
+    }
+  });
+
+  // Allow Enter key to start when initials are entered
+  initialsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && initialsInput.value.trim().length >= 2) {
+      fsBtn.click();
+    }
+  });
+
+  // Focus on initials input when page loads
+  window.addEventListener('load', () => {
+    initialsInput.focus();
+  });
+
   // Helper to notify parent window if embedded
-function notifyParentIfEmbedded(message) {
-  if (window !== window.top) {
-    // We're in an iframe
-    try {
-      window.parent.postMessage({
-        type: 'task-complete',
-        taskCode: 'MRT',
-        ...message
-      }, '*');  // You can restrict origin for security if needed
-    } catch(e) {
-      console.log('Could not communicate with parent:', e);
+  function notifyParentIfEmbedded(message) {
+    if (window !== window.top) {
+      // We're in an iframe
+      try {
+        window.parent.postMessage({
+          type: 'task-complete',
+          taskCode: 'MRT',
+          ...message
+        }, '*');  // You can restrict origin for security if needed
+      } catch(e) {
+        console.log('Could not communicate with parent:', e);
+      }
     }
   }
-}
+
   // ---------- Utils ----------
   function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}}
   function hashCode(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;}return Math.abs(h)||1;}
@@ -189,27 +216,28 @@ function notifyParentIfEmbedded(message) {
   }
 
   // ---------- Google Sheets ----------
- async function sendToSheets(payload){
-  const body = {
-    action: 'trial',
-    version: CFG.VERSION,
-    session_code: SESSION_CODE || '',
-    participant_id: PARTICIPANT_ID || '',
-    user_agent: navigator.userAgent,
-    ...payload,
-  };
   
-  if (!CFG.SHEETS_URL) return;  // Only check if URL exists
-  
-  try {
-    await fetch(CFG.SHEETS_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(body)
-    });
-  } catch(e) { /* silent */ }
-}
+  async function sendToSheets(payload){
+    const body = {
+      action: 'trial',
+      version: CFG.VERSION,
+      session_code: SESSION_CODE || '',
+      participant_id: PARTICIPANT_ID || '',
+      user_agent: navigator.userAgent,
+      ...payload,
+    };
+    
+    if (!CFG.SHEETS_URL) return;  // Only check if URL exists
+    
+    try {
+      await fetch(CFG.SHEETS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify(body)
+      });
+    } catch(e) { /* silent */ }
+  }
 
   // ---------- Flow ----------
   function startPractice(){
@@ -233,67 +261,64 @@ function notifyParentIfEmbedded(message) {
     nextTrial();
   }
 
-function nextTrial(){
-  if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
-  if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+  function nextTrial(){
+    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
 
-  const list = state.practice ? state.practiceTrials : state.mainTrials;
+    const list = state.practice ? state.practiceTrials : state.mainTrials;
 
-  // ✅ Only end a block after all its trials are done
-  if (state.trialIndex >= list.length) {
-    if (state.practice) {
-      showFeedback('Practice complete', '#4caf50');
-      setTimeout(() => {
-        // Prebuild main so the count isn’t (0)
-        if (!state.mainTrials.length) state.mainTrials = makeMainTrials();
-        const mainCount = state.mainTrials.length;
+    // ✅ Only end a block after all its trials are done
+    if (state.trialIndex >= list.length) {
+      if (state.practice) {
+        showFeedback('Practice complete', '#4caf50');
+        setTimeout(() => {
+          // Prebuild main so the count isn't (0)
+          if (!state.mainTrials.length) state.mainTrials = makeMainTrials();
+          const mainCount = state.mainTrials.length;
 
-        ibox.innerHTML = `
-          <h2>Main Task</h2>
-          <p>You’ll now begin the main block (${mainCount} trials). No feedback will be shown.</p>
-          <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
-        ibox.style.display = 'block';
-        document.getElementById('beginMainBtn').onclick = () => { 
-          ibox.style.display = 'none'; 
-          startMain(); 
-        };
-      }, 500);
-    } else {
-      finishTask();
+          ibox.innerHTML = `
+            <h2>Main Task</h2>
+            <p>You'll now begin the main block (${mainCount} trials). No feedback will be shown.</p>
+            <div class="btnrow"><button class="btn" id="beginMainBtn">Begin</button></div>`;
+          ibox.style.display = 'block';
+          document.getElementById('beginMainBtn').onclick = () => { 
+            ibox.style.display = 'none'; 
+            startMain(); 
+          };
+        }, 500);
+      } else {
+        finishTask();
+      }
+      return;
     }
-    return;
+
+    state.current = list[state.trialIndex];
+
+    // --- Fixation (single central) ---
+    const side = computeCanvasSide();
+    const ctx = sizeCanvasSquare(canvas, side);
+    drawCenteredFixation(ctx, side);
+
+    setTimeout(() => {
+      // --- Stimulus (letters only) ---
+      layoutAndDraw(state.current);
+      state.onsetTs = performance.now();
+
+      // Keyboard (F = same, J = mirror)
+      state.onKey = (ev) => handleKey(ev);
+      window.addEventListener('keydown', state.onKey, { once: true });
+
+      // Touch buttons (set per trial)
+      if (touchSame)   touchSame.onclick   = () => handleResponse('same');
+      if (touchMirror) touchMirror.onclick = () => handleResponse('mirror');
+
+      // Timeout
+      state.timer = setTimeout(() => handleResponse('none'), CFG.MAX_RT_MS);
+    }, CFG.FIXATION_MS);
+
+    const total = state.practice ? state.practiceTrials.length : state.mainTrials.length;
+    setProgress(state.trialIndex + 1, total);
   }
-
-
-
-  state.current = list[state.trialIndex];
-
-  // --- Fixation (single central) ---
-  const side = computeCanvasSide();
-  const ctx = sizeCanvasSquare(canvas, side);
-  drawCenteredFixation(ctx, side);
-
-  setTimeout(() => {
-    // --- Stimulus (letters only) ---
-    layoutAndDraw(state.current);
-    state.onsetTs = performance.now();
-
-    // Keyboard (F = same, J = mirror)
-    state.onKey = (ev) => handleKey(ev);
-    window.addEventListener('keydown', state.onKey, { once: true });
-
-    // Touch buttons (set per trial)
-    if (touchSame)   touchSame.onclick   = () => handleResponse('same');
-    if (touchMirror) touchMirror.onclick = () => handleResponse('mirror');
-
-    // Timeout
-    state.timer = setTimeout(() => handleResponse('none'), CFG.MAX_RT_MS);
-  }, CFG.FIXATION_MS);
-
-  const total = state.practice ? state.practiceTrials.length : state.mainTrials.length;
-  setProgress(state.trialIndex + 1, total);
-}
-
 
   function handleKey(ev){
     const k = (ev.key || '').toLowerCase();
@@ -362,17 +387,30 @@ function nextTrial(){
     notifyParentIfEmbedded({ completed: true });
 
     ibox.innerHTML = `
-  <h2>Task complete</h2>
-  <p>Thank you for completing the task!</p>
-  <div class="btnrow">
-    <button class="btn secondary" id="closeBtn">Close</button>
-  </div>`;
+      <h2>Task complete</h2>
+      <p>Thank you for completing the task!</p>
+      <p style="margin-top: 10px; color: #9aa;">Participant: ${PARTICIPANT_ID}</p>
+      <div class="btnrow">
+        <button class="btn secondary" id="closeBtn">Close</button>
+      </div>`;
     ibox.style.display = 'block';
     document.getElementById('closeBtn').onclick = () => { ibox.style.display = 'none'; };
   }
 
   // ---------- Start / Resize ----------
   fsBtn.addEventListener('click', async () => {
+    // Get and validate initials
+    const initials = initialsInput.value.trim().toUpperCase();
+    if (initials.length < 2) {
+      initialsInput.focus();
+      return;
+    }
+    
+    // Set participant ID and initialize RNG with it
+    PARTICIPANT_ID = initials;
+    RNG_SEED = hashCode(SESSION_CODE || PARTICIPANT_ID || (Date.now() + ''));
+    state.rng = mulberry32(RNG_SEED);
+    
     try {
       if (!isEmbedded) await enterFullscreenIfPossible();
     } catch (_) {
@@ -397,8 +435,6 @@ function nextTrial(){
   document.addEventListener('fullscreenchange', () => {
     if (state.current) layoutAndDraw(state.current);
   });
-
- 
 
   // Initial HUD
   setPhase('Ready');
