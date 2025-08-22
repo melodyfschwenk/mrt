@@ -23,6 +23,7 @@
   const progressChip= document.getElementById('progressChip');
   const touchSame   = document.getElementById('touchSame');
   const touchMirror = document.getElementById('touchMirror');
+  let feedbackTimer = null;
 
   // ---------- State ----------
   const state = {
@@ -172,7 +173,12 @@
     feedbackEl.textContent = txt;
     feedbackEl.style.color = color || '#fff';
     feedbackEl.style.display = 'block';
-    setTimeout(()=>{ feedbackEl.style.display = 'none'; }, 900);
+    if (feedbackTimer) clearTimeout(feedbackTimer);
+    const hideDelay = Math.max(0, (CFG.ITI_MS ?? 0) - 50);
+    feedbackTimer = setTimeout(() => {
+      feedbackEl.style.display = 'none';
+      feedbackTimer = null;
+    }, hideDelay);
   }
 
   function setPhase(name){ phaseChip.textContent = name; }
@@ -424,9 +430,8 @@
     }
   });
 
-  const startPracticeHandler = () => startPractice();
+  const startPracticeHandler = (e) => { e.preventDefault(); startPractice(); };
   startPracticeBtn.addEventListener('click', startPracticeHandler);
-  startPracticeBtn.addEventListener('pointerup', startPracticeHandler);
 
   window.addEventListener('resize', () => {
     if (state.current) layoutAndDraw(state.current);
