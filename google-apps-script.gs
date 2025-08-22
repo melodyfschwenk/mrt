@@ -7,6 +7,7 @@
  */
 
 const SHEET_NAME = 'mrt_trials';
+const TRACKING_SHEET_NAME = 'mrt_tracking';
 
 function getSheet_() {
   const ss = SpreadsheetApp.getActive();
@@ -38,11 +39,52 @@ function getSheet_() {
   return sh;
 }
 
+function getTrackingSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName(TRACKING_SHEET_NAME);
+  if (!sh) {
+    sh = ss.insertSheet(TRACKING_SHEET_NAME);
+    sh.appendRow([
+      'timestamp_server',
+      'version',
+      'session_code',
+      'participant_id',
+      'user_agent'
+    ]);
+  }
+  return sh;
+}
+
+function logParticipant_(body, ts) {
+  const sh = getTrackingSheet_();
+  const last = sh.getLastRow();
+  if (last > 1) {
+    const existingCodes = sh.getRange(2, 3, last - 1, 1).getValues().flat();
+    if (existingCodes.includes(body.session_code)) {
+      return; // Avoid duplicates
+    }
+  }
+  sh.appendRow([
+    ts,
+    body.version || '',
+    body.session_code || '',
+    body.participant_id || '',
+    body.user_agent || ''
+  ]);
+}
+
 function doPost(e) {
   try {
-    const sh = getSheet_();
     const body = e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : {};
     const ts = new Date();
+
+    if (body.action === 'participant') {
+      logParticipant_(body, ts);
+      return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+                          .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const sh = getSheet_();
 
     // For trial rows
     const row = [

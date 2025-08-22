@@ -410,7 +410,10 @@
     PARTICIPANT_ID = initials;
     RNG_SEED = hashCode(SESSION_CODE || PARTICIPANT_ID || (Date.now() + ''));
     state.rng = mulberry32(RNG_SEED);
-    
+
+    // Register participant on the tracking sheet
+    await sendToSheets({ action: 'participant', timestamp: new Date().toISOString() });
+
     try {
       if (!isEmbedded) await enterFullscreenIfPossible();
     } catch (_) {
