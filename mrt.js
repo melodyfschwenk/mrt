@@ -26,6 +26,14 @@
   const touchMirror = document.getElementById('touchMirror');
   let feedbackTimer = null;
 
+  function clearFeedback(){
+    if (feedbackTimer) {
+      clearTimeout(feedbackTimer);
+      feedbackTimer = null;
+    }
+    feedbackEl.style.display = 'none';
+  }
+
   // ---------- State ----------
   const state = {
     practice: true,
@@ -180,6 +188,19 @@
       feedbackEl.style.display = 'none';
       feedbackTimer = null;
     }, hideDelay);
+  }
+
+  function clearTrialInteractions(){
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+    if (state.onKey) {
+      window.removeEventListener('keydown', state.onKey);
+      state.onKey = null;
+    }
+    if (touchSame) touchSame.onclick = null;
+    if (touchMirror) touchMirror.onclick = null;
   }
 
   function setPhase(name){ phaseChip.textContent = name; }
@@ -359,8 +380,7 @@
   }
 
   function nextTrial(){
-    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
-    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+    clearTrialInteractions();
 
     const list = state.practice ? state.practiceTrials : state.mainTrials;
 
@@ -425,8 +445,7 @@
   }
 
   function handleResponse(choice){
-    clearTimeout(state.timer); state.timer = null;
-    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
+    clearTrialInteractions();
 
     const cur = state.current;
     const correctAnswer = cur.condition;
@@ -464,6 +483,9 @@
   }
 
   async function finishTask(){
+    clearTrialInteractions();
+    clearFeedback();
+    state.current = null;
     setPhase('Complete');
     setProgress(state.mainTrials.length, state.mainTrials.length);
 
