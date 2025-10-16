@@ -10,6 +10,9 @@ window.MRT_CONFIG = {
   TRIALS_PER_PAIR: 2,         // How many times each angle pair appears per condition
                                // With 7 angles: 7×7 = 49 pairs × 2 conditions × 2 reps = 196 trials
                                // Adjust this based on desired experiment length
+
+  // Limit the total number of main trials shown to participants
+  MAX_MAIN_TRIALS: 140,
   
   // ORIGINAL SETTING (used only if USE_ALL_ANGLE_PAIRS is false):
   TRIALS_PER_ANGLE_PER_COND: 10, // For same-angle only mode

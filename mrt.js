@@ -272,7 +272,14 @@
       }
     }
     
-    return shuffle(trials, state.rng);
+    let mainTrials = shuffle(trials, state.rng);
+
+    const maxTrials = CFG.MAX_MAIN_TRIALS;
+    if (Number.isFinite(maxTrials) && maxTrials > 0 && mainTrials.length > maxTrials) {
+      mainTrials = mainTrials.slice(0, maxTrials);
+    }
+
+    return mainTrials;
   }
 
   function makePracticeTrials(n){
@@ -507,7 +514,7 @@
 
     ibox.innerHTML = `
       <h2>Task complete</h2>
-      <p>Thank you for completing the task!</p>
+      <p>Thank you, you may close this window now.</p>
       <p style="margin-top: 10px; color: #9aa;">Participant: ${PARTICIPANT_ID}</p>
       <div class="btnrow">
         <button class="btn secondary" id="closeBtn">Close</button>
