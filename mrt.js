@@ -1,5 +1,4 @@
 /* mrt.js — single-canvas, central fixation, closer letters, with initials */
-/* MODIFIED: Now includes all possible angle pair combinations */
 
 (() => {
   // Add this at the very start
@@ -25,14 +24,6 @@
   const touchSame   = document.getElementById('touchSame');
   const touchMirror = document.getElementById('touchMirror');
   let feedbackTimer = null;
-
-  function clearFeedback(){
-    if (feedbackTimer) {
-      clearTimeout(feedbackTimer);
-      feedbackTimer = null;
-    }
-    feedbackEl.style.display = 'none';
-  }
 
   // ---------- State ----------
   const state = {
@@ -190,147 +181,44 @@
     }, hideDelay);
   }
 
-  function clearTrialInteractions(){
-    if (state.timer) {
-      clearTimeout(state.timer);
-      state.timer = null;
-    }
-    if (state.onKey) {
-      window.removeEventListener('keydown', state.onKey);
-      state.onKey = null;
-    }
-    if (touchSame) touchSame.onclick = null;
-    if (touchMirror) touchMirror.onclick = null;
-  }
-
   function setPhase(name){ phaseChip.textContent = name; }
   function setProgress(cur, total){ progressChip.textContent = `${cur} / ${total}`; }
 
-  // ---------- MODIFIED: Trial list generation for all angle pairs ----------
+  // ---------- Trial list generation ----------
   function makeMainTrials(){
     const trials = [];
-    
-    // Check if we should use all pairs or same-angle only (configurable)
-    const useAllPairs = CFG.USE_ALL_ANGLE_PAIRS !== false; // Default to true
-    
-    if (useAllPairs) {
-      // NEW: Generate all possible angle pair combinations
-      for (const leftAngle of CFG.ANGLES) {
-        for (const rightAngle of CFG.ANGLES) {
-          // For each angle pair, create trials for both conditions
-          const trialsPerPair = CFG.TRIALS_PER_PAIR || 2; // Configurable repetitions per pair
-          
-          for (const cond of ['same', 'mirror']) {
-            for (let i = 0; i < trialsPerPair; i++) {
-              // Determine which letter(s) to mirror
-              let leftMirror = false;
-              let rightMirror = false;
-              
-              if (cond === 'mirror') {
-                // Randomly choose which letter to mirror
-                if (state.rng() < 0.5) {
-                  leftMirror = true;
-                } else {
-                  rightMirror = true;
-                }
-              }
-              
-              // Calculate angular difference for analysis
-              const angleDiff = Math.min(
-                Math.abs(rightAngle - leftAngle),
-                360 - Math.abs(rightAngle - leftAngle)
-              );
-              
-              trials.push({
-                condition: cond,
-                leftAngle: leftAngle,
-                rightAngle: rightAngle,
-                angleDiff: angleDiff, // Store the angular difference
-                leftMirror: leftMirror,
-                rightMirror: rightMirror,
-              });
-            }
-          }
-        }
-      }
-    } else {
-      // ORIGINAL: Same-angle only version
-      for (const angle of CFG.ANGLES) {
-        for (const cond of ['same','mirror']) {
-          for (let i = 0; i < CFG.TRIALS_PER_ANGLE_PER_COND; i++){
-            const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
-            trials.push({
-              condition: cond,
-              leftAngle: angle,
-              rightAngle: angle,
-              angleDiff: 0, // Same angle = 0 difference
-              leftMirror: mirrorLeft,
-              rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
-            });
-          }
+    for (const angle of CFG.ANGLES) {
+      for (const cond of ['same','mirror']) {
+        for (let i=0;i<CFG.TRIALS_PER_ANGLE_PER_COND;i++){
+          const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
+          trials.push({
+            condition: cond, angle,
+            leftAngle: angle,  leftMirror: mirrorLeft,
+            rightAngle: angle, rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
+          });
         }
       }
     }
-    
     return shuffle(trials, state.rng);
   }
 
   function makePracticeTrials(n){
     n = Number.isFinite(+n) && +n > 0 ? +n : 10;
-    
-    // For practice, use a subset of angle combinations
-    const practiceTrials = [];
-    const angles = [...CFG.ANGLES];
-    
-    // Create a diverse set of practice trials
-    const practicePairs = [];
-    
-    // Include some same-angle pairs (easier)
-    for (let i = 0; i < Math.min(3, angles.length); i++) {
-      practicePairs.push([angles[i], angles[i]]);
+    const angles = shuffle([...CFG.ANGLES], state.rng);
+    const base = [];
+    for (let i=0;i<Math.min(angles.length, Math.ceil(n/2)); i++){
+      base.push({condition:'same', angle:angles[i]});
+      base.push({condition:'mirror', angle:angles[i]});
     }
-    
-    // Include some different-angle pairs
-    if (angles.length > 1) {
-      practicePairs.push([angles[0], angles[1]]);
-      practicePairs.push([angles[0], angles[angles.length - 1]]);
-      if (angles.length > 2) {
-        practicePairs.push([angles[1], angles[2]]);
-      }
-    }
-    
-    // Create trials from these pairs
-    for (const [leftAngle, rightAngle] of practicePairs) {
-      for (const cond of ['same', 'mirror']) {
-        let leftMirror = false;
-        let rightMirror = false;
-        
-        if (cond === 'mirror') {
-          if (state.rng() < 0.5) {
-            leftMirror = true;
-          } else {
-            rightMirror = true;
-          }
-        }
-        
-        const angleDiff = Math.min(
-          Math.abs(rightAngle - leftAngle),
-          360 - Math.abs(rightAngle - leftAngle)
-        );
-        
-        practiceTrials.push({
-          condition: cond,
-          leftAngle: leftAngle,
-          rightAngle: rightAngle,
-          angleDiff: angleDiff,
-          leftMirror: leftMirror,
-          rightMirror: rightMirror,
-        });
-      }
-    }
-    
-    // Shuffle and return requested number
-    return shuffle(practiceTrials, state.rng).slice(0, n);
+    const shortList = shuffle(base, state.rng).slice(0, n);
+    return shortList.map(t => {
+      const mirrorLeft = t.condition === 'mirror' ? (state.rng()<0.5) : false;
+      return {
+        condition: t.condition, angle: t.angle,
+        leftAngle: t.angle,  leftMirror: mirrorLeft,
+        rightAngle:t.angle, rightMirror: (t.condition === 'mirror') ? !mirrorLeft : false,
+      };
+    });
   }
 
   // ---------- Google Sheets ----------
@@ -380,7 +268,8 @@
   }
 
   function nextTrial(){
-    clearTrialInteractions();
+    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
+    if (state.timer) { clearTimeout(state.timer); state.timer = null; }
 
     const list = state.practice ? state.practiceTrials : state.mainTrials;
 
@@ -445,7 +334,8 @@
   }
 
   function handleResponse(choice){
-    clearTrialInteractions();
+    clearTimeout(state.timer); state.timer = null;
+    if (state.onKey) { window.removeEventListener('keydown', state.onKey); state.onKey = null; }
 
     const cur = state.current;
     const correctAnswer = cur.condition;
@@ -456,10 +346,10 @@
       block: state.block,
       trial_index: state.trialIndex + 1,
       condition: cur.condition,
-      angle_diff: cur.angleDiff, // NEW: Include angular difference
+      angle: cur.angle,
       left_angle: cur.leftAngle,
-      right_angle: cur.rightAngle,
       left_mirror: cur.leftMirror ? 1 : 0,
+      right_angle: cur.rightAngle,
       right_mirror: cur.rightMirror ? 1 : 0,
       response: choice,
       correct_response: correctAnswer,
@@ -483,9 +373,6 @@
   }
 
   async function finishTask(){
-    clearTrialInteractions();
-    clearFeedback();
-    state.current = null;
     setPhase('Complete');
     setProgress(state.mainTrials.length, state.mainTrials.length);
 
