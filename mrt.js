@@ -187,19 +187,46 @@
   // ---------- Trial list generation ----------
   function makeMainTrials(){
     const trials = [];
-    for (const angle of CFG.ANGLES) {
-      for (const cond of ['same','mirror']) {
-        for (let i=0;i<CFG.TRIALS_PER_ANGLE_PER_COND;i++){
-          const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
-          trials.push({
-            condition: cond, angle,
-            leftAngle: angle,  leftMirror: mirrorLeft,
-            rightAngle: angle, rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
-          });
+
+    if (CFG.USE_ALL_ANGLE_PAIRS) {
+      const reps = Math.max(1, Math.floor(CFG.TRIALS_PER_PAIR || 1));
+      for (let rep = 0; rep < reps; rep++) {
+        for (const leftAngle of CFG.ANGLES) {
+          for (const rightAngle of CFG.ANGLES) {
+            for (const cond of ['same', 'mirror']) {
+              const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
+              trials.push({
+                condition: cond,
+                angle: rightAngle, // legacy field retained for backwards compatibility
+                leftAngle,
+                leftMirror: mirrorLeft,
+                rightAngle,
+                rightMirror: cond === 'mirror' ? !mirrorLeft : false,
+              });
+            }
+          }
+        }
+      }
+    } else {
+      for (const angle of CFG.ANGLES) {
+        for (const cond of ['same','mirror']) {
+          for (let i=0;i<CFG.TRIALS_PER_ANGLE_PER_COND;i++){
+            const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
+            trials.push({
+              condition: cond, angle,
+              leftAngle: angle,  leftMirror: mirrorLeft,
+              rightAngle: angle, rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
+            });
+          }
         }
       }
     }
-    return shuffle(trials, state.rng);
+
+    const shuffled = shuffle(trials, state.rng);
+    const limit = Number.isFinite(+CFG.MAIN_TRIAL_LIMIT) && +CFG.MAIN_TRIAL_LIMIT > 0
+      ? Math.min(shuffled.length, Math.floor(+CFG.MAIN_TRIAL_LIMIT))
+      : shuffled.length;
+    return shuffled.slice(0, limit);
   }
 
   function makePracticeTrials(n){
@@ -394,13 +421,9 @@
 
     ibox.innerHTML = `
       <h2>Task complete</h2>
-      <p>Thank you for completing the task!</p>
-      <p style="margin-top: 10px; color: #9aa;">Participant: ${PARTICIPANT_ID}</p>
-      <div class="btnrow">
-        <button class="btn secondary" id="closeBtn">Close</button>
-      </div>`;
+      <p>Thank you, you may close this window now.</p>
+      <p style="margin-top: 10px; color: #9aa;">Participant: ${PARTICIPANT_ID}</p>`;
     ibox.style.display = 'block';
-    document.getElementById('closeBtn').onclick = () => { ibox.style.display = 'none'; };
   }
 
   // ---------- Start / Resize ----------

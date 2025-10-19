@@ -10,9 +10,10 @@ window.MRT_CONFIG = {
   TRIALS_PER_PAIR: 2,         // How many times each angle pair appears per condition
                                // With 7 angles: 7×7 = 49 pairs × 2 conditions × 2 reps = 196 trials
                                // Adjust this based on desired experiment length
+  MAIN_TRIAL_LIMIT: 140,      // Hard cap on the number of main-task trials (after shuffling)
   
   // ORIGINAL SETTING (used only if USE_ALL_ANGLE_PAIRS is false):
-  TRIALS_PER_ANGLE_PER_COND: 10, // For same-angle only mode
+  TRIALS_PER_ANGLE_PER_COND: 10, // For same-angle only mode (still subject to MAIN_TRIAL_LIMIT)
   
   PRACTICE_TRIALS: 12,
   FIXATION_MS: 700,
