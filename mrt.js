@@ -84,6 +84,12 @@
   function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;}}
   function hashCode(str){let h=0;for(let i=0;i<str.length;i++){h=((h<<5)-h)+str.charCodeAt(i);h|=0;}return Math.abs(h)||1;}
   function shuffle(arr, rng){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()* (i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+  function angularDifference(a, b){
+    const aNorm = Number.isFinite(+a) ? +a : 0;
+    const bNorm = Number.isFinite(+b) ? +b : 0;
+    const raw = Math.abs(aNorm - bNorm) % 360;
+    return raw > 180 ? 360 - raw : raw;
+  }
 
   function enterFullscreenIfPossible(){
     const root = document.documentElement;
@@ -186,20 +192,81 @@
 
   // ---------- Trial list generation ----------
   function makeMainTrials(){
+    const angles = Array.isArray(CFG.ANGLES) && CFG.ANGLES.length ? [...CFG.ANGLES] : [0];
+    const defaultCap = 140;
+    let cap = Number.isFinite(+CFG.MAIN_TRIAL_CAP) ? Math.floor(+CFG.MAIN_TRIAL_CAP) : defaultCap;
+    if (cap <= 0) cap = defaultCap;
+    if (cap % 2 !== 0) cap -= 1;
+    if (cap < 2) cap = 2;
+
+    if (CFG.USE_ALL_ANGLE_PAIRS) {
+      const reps = Math.max(1, Math.floor(CFG.TRIALS_PER_PAIR || 1));
+      const basePairs = [];
+      for (const left of angles) {
+        for (const right of angles) {
+          basePairs.push({ left, right });
+        }
+      }
+      if (!basePairs.length) return [];
+
+      let expandedPairs = [];
+      for (let r = 0; r < reps; r++) {
+        expandedPairs = expandedPairs.concat(basePairs);
+      }
+
+      const shuffledPairs = shuffle(expandedPairs, state.rng);
+      const maxPairs = Math.min(shuffledPairs.length, Math.floor(cap / 2));
+      const selectedPairs = shuffledPairs.slice(0, Math.max(0, maxPairs));
+      const trials = [];
+
+      for (const pair of selectedPairs) {
+        const diff = angularDifference(pair.left, pair.right);
+        trials.push({
+          condition: 'same',
+          angle: pair.left,
+          leftAngle: pair.left,
+          leftMirror: false,
+          rightAngle: pair.right,
+          rightMirror: false,
+          angleDiff: diff,
+        });
+
+        const mirrorLeft = state.rng() < 0.5;
+        trials.push({
+          condition: 'mirror',
+          angle: pair.left,
+          leftAngle: pair.left,
+          leftMirror: mirrorLeft,
+          rightAngle: pair.right,
+          rightMirror: !mirrorLeft,
+          angleDiff: diff,
+        });
+      }
+
+      const shuffledTrials = shuffle(trials, state.rng);
+      return shuffledTrials.slice(0, Math.min(cap, shuffledTrials.length));
+    }
+
+    const perCond = Math.max(1, Math.floor(CFG.TRIALS_PER_ANGLE_PER_COND || 1));
     const trials = [];
-    for (const angle of CFG.ANGLES) {
-      for (const cond of ['same','mirror']) {
-        for (let i=0;i<CFG.TRIALS_PER_ANGLE_PER_COND;i++){
+    for (const angle of angles) {
+      for (const cond of ['same', 'mirror']) {
+        for (let i = 0; i < perCond; i++) {
           const mirrorLeft = cond === 'mirror' ? (state.rng() < 0.5) : false;
           trials.push({
-            condition: cond, angle,
-            leftAngle: angle,  leftMirror: mirrorLeft,
-            rightAngle: angle, rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
+            condition: cond,
+            angle,
+            leftAngle: angle,
+            leftMirror: mirrorLeft,
+            rightAngle: angle,
+            rightMirror: (cond === 'mirror') ? !mirrorLeft : false,
+            angleDiff: 0,
           });
         }
       }
     }
-    return shuffle(trials, state.rng);
+    const shuffledTrials = shuffle(trials, state.rng);
+    return shuffledTrials.slice(0, Math.min(cap, shuffledTrials.length));
   }
 
   function makePracticeTrials(n){
@@ -217,6 +284,7 @@
         condition: t.condition, angle: t.angle,
         leftAngle: t.angle,  leftMirror: mirrorLeft,
         rightAngle:t.angle, rightMirror: (t.condition === 'mirror') ? !mirrorLeft : false,
+        angleDiff: angularDifference(t.angle, t.angle),
       };
     });
   }
@@ -351,6 +419,7 @@
       left_mirror: cur.leftMirror ? 1 : 0,
       right_angle: cur.rightAngle,
       right_mirror: cur.rightMirror ? 1 : 0,
+      angle_diff: (typeof cur.angleDiff === 'number') ? cur.angleDiff : angularDifference(cur.leftAngle, cur.rightAngle),
       response: choice,
       correct_response: correctAnswer,
       accuracy: acc,

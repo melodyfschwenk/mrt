@@ -7,9 +7,8 @@ window.MRT_CONFIG = {
   
   // NEW SETTINGS FOR ALL PAIRS:
   USE_ALL_ANGLE_PAIRS: true,  // Set to false to revert to same-angle only
-  TRIALS_PER_PAIR: 2,         // How many times each angle pair appears per condition
-                               // With 7 angles: 7×7 = 49 pairs × 2 conditions × 2 reps = 196 trials
-                               // Adjust this based on desired experiment length
+  TRIALS_PER_PAIR: 2,         // How many times each angle pair appears before shuffling & capping
+  MAIN_TRIAL_CAP: 140,        // Hard cap on the number of main trials (mirrored so it stays even)
   
   // ORIGINAL SETTING (used only if USE_ALL_ANGLE_PAIRS is false):
   TRIALS_PER_ANGLE_PER_COND: 10, // For same-angle only mode
@@ -44,20 +43,17 @@ CONFIGURATION NOTES:
 With USE_ALL_ANGLE_PAIRS = true:
 - Total angle pairs: 7 × 7 = 49 unique combinations
 - Each pair appears in both 'same' and 'mirror' conditions
-- TRIALS_PER_PAIR controls repetitions:
-  - 1 rep = 98 trials (49 pairs × 2 conditions)
-  - 2 reps = 196 trials 
-  - 3 reps = 294 trials
-  - 4 reps = 392 trials
+- TRIALS_PER_PAIR controls repetitions **before** the cap is applied
+- MAIN_TRIAL_CAP trims the shuffled list to an even number of trials (default 140)
 
 To reduce experiment length, you could:
-1. Reduce TRIALS_PER_PAIR to 1
-2. Use fewer angles (e.g., [0, 45, 90, 135, 180] = 5 angles = 50 trials with 1 rep)
-3. Exclude same-angle pairs if desired (would need code modification)
+1. Reduce TRIALS_PER_PAIR to 1 (98 trials before capping)
+2. Use fewer angles (e.g., [0, 45, 90, 135, 180] = 5 angles)
+3. Lower MAIN_TRIAL_CAP if you need fewer than 140 trials
 
-The data now includes:
+Logged data now includes:
 - left_angle: rotation of left letter
-- right_angle: rotation of right letter  
-- angle_diff: angular difference between them (0-180°)
+- right_angle: rotation of right letter
+- angle_diff: angular difference between them (0–180°)
 - This allows analysis of RT/accuracy as a function of angular disparity
 */
